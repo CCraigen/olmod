@@ -264,6 +264,7 @@ namespace GameMod
                 if (NetworkMatch.m_force_loadout == 1)
                 {
                     player.m_weapon_level[(int)NetworkMatch.m_force_w1] = WeaponUnlock.LEVEL_1;
+                    MPLoadoutWeaponSwapper.weps[0] = (int)NetworkMatch.m_force_w1; //CCF
                     if (Player.WeaponUsesAmmo2(NetworkMatch.m_force_w1))
                     {
                         num2++;
@@ -271,10 +272,15 @@ namespace GameMod
                     if (NetworkMatch.m_force_w2 != WeaponType.NUM)
                     {
                         player.m_weapon_level[(int)NetworkMatch.m_force_w2] = WeaponUnlock.LEVEL_1;
+                        MPLoadoutWeaponSwapper.weps[1] = (int)NetworkMatch.m_force_w2; //CCF
                         if (Player.WeaponUsesAmmo2(NetworkMatch.m_force_w2))
                         {
                             num2++;
                         }
+                    }
+                    else
+                    {
+                        MPLoadoutWeaponSwapper.weps[1] = (int)NetworkMatch.m_force_w1; //CCF
                     }
                     if (NetworkMatch.m_force_m1 != MissileType.NUM)
                     {
@@ -294,11 +300,23 @@ namespace GameMod
                     var loadout_data = MPLoadouts.NetworkLoadouts[lobby_id];
                     var loadout = (!use_loadout1) ? loadout_data.loadouts[1] : loadout_data.loadouts[0];
 
+                    int count = 0; // CCF
+
                     foreach (var weapon in loadout.weapons)
                     {
                         player.m_weapon_level[(int)weapon] = WeaponUnlock.LEVEL_1;
                         if (Player.WeaponUsesAmmo2(weapon))
                             num2++;
+
+                        if (count < 2) // CCF
+                        {
+                            MPLoadoutWeaponSwapper.weps[count] = (int)weapon;
+                            count++;
+                        }
+                    }
+                    if (count == 1)
+                    {
+                        MPLoadoutWeaponSwapper.weps[1] = MPLoadoutWeaponSwapper.weps[0];
                     }
 
                     foreach (var missile in loadout.missiles)
@@ -387,7 +405,33 @@ namespace GameMod
                 {
                     Debug.Log($"Didn't find custom loadout data for {player.m_mp_name}, {lobby_id}, using stock LoadoutDataMessage.  (Old client?)");
                     NetworkSpawnPlayer.SetMultiplayerLoadout(player, loadout_data, use_loadout1);
+
+                    // set the appropriate swapper weapons
+                    if (NetworkMatch.m_force_loadout == 1)
+                    {
+                        MPLoadoutWeaponSwapper.weps[0] = (int)NetworkMatch.m_force_w1;
+
+                        if (NetworkMatch.m_force_w2 != WeaponType.NUM)
+                        {
+                            MPLoadoutWeaponSwapper.weps[1] = (int)NetworkMatch.m_force_w2;
+                        }
+                        else
+                        {
+                            MPLoadoutWeaponSwapper.weps[1] = (int)NetworkMatch.m_force_w1;
+                        }
+                    }
+                    else
+                    {
+                        int idx = ((!use_loadout1) ? loadout_data.m_mp_loadout2 : loadout_data.m_mp_loadout1);
+                        MPLoadoutWeaponSwapper.weps[0] = (int)loadout_data.GetMpLoadoutWeapon1(idx);
+                        MPLoadoutWeaponSwapper.weps[1] = (int)loadout_data.GetMpLoadoutWeapon2(idx);
+                        if (MPLoadoutWeaponSwapper.weps[1] == (int)WeaponType.NUM)
+                        {
+                            MPLoadoutWeaponSwapper.weps[1] = MPLoadoutWeaponSwapper.weps[0];
+                        }
+                    }
                 }
+                MPLoadoutWeaponSwapper.selected = 0;
             }
         }
 
