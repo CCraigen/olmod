@@ -74,7 +74,7 @@ namespace GameMod
             }
         }
         
-        static void SetMultiplayerLoadoutAndModifiers(Player player, LoadoutDataMessage loadout_data, bool use_loadout1, int lobby_id)
+        static void SetMultiplayerLoadoutSwap(Player player, LoadoutDataMessage loadout_data, bool use_loadout1, int lobby_id)
         {
             NetworkSpawnPlayer.SetMultiplayerLoadout(player, loadout_data, use_loadout1);
 
