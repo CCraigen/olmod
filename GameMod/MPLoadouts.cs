@@ -264,7 +264,7 @@ namespace GameMod
                 if (NetworkMatch.m_force_loadout == 1)
                 {
                     player.m_weapon_level[(int)NetworkMatch.m_force_w1] = WeaponUnlock.LEVEL_1;
-                    MPLoadoutWeaponSwapper.weps[0] = (int)NetworkMatch.m_force_w1; //CCF
+                    MPLoadoutWeaponSwap.weps[0] = (int)NetworkMatch.m_force_w1; //CCF
                     if (Player.WeaponUsesAmmo2(NetworkMatch.m_force_w1))
                     {
                         num2++;
@@ -272,7 +272,7 @@ namespace GameMod
                     if (NetworkMatch.m_force_w2 != WeaponType.NUM)
                     {
                         player.m_weapon_level[(int)NetworkMatch.m_force_w2] = WeaponUnlock.LEVEL_1;
-                        MPLoadoutWeaponSwapper.weps[1] = (int)NetworkMatch.m_force_w2; //CCF
+                        MPLoadoutWeaponSwap.weps[1] = (int)NetworkMatch.m_force_w2; //CCF
                         if (Player.WeaponUsesAmmo2(NetworkMatch.m_force_w2))
                         {
                             num2++;
@@ -280,7 +280,7 @@ namespace GameMod
                     }
                     else
                     {
-                        MPLoadoutWeaponSwapper.weps[1] = (int)NetworkMatch.m_force_w1; //CCF
+                        MPLoadoutWeaponSwap.weps[1] = (int)NetworkMatch.m_force_w1; //CCF
                     }
                     if (NetworkMatch.m_force_m1 != MissileType.NUM)
                     {
@@ -310,13 +310,13 @@ namespace GameMod
 
                         if (count < 2) // CCF
                         {
-                            MPLoadoutWeaponSwapper.weps[count] = (int)weapon;
+                            MPLoadoutWeaponSwap.weps[count] = (int)weapon;
                             count++;
                         }
                     }
                     if (count == 1)
                     {
-                        MPLoadoutWeaponSwapper.weps[1] = MPLoadoutWeaponSwapper.weps[0];
+                        MPLoadoutWeaponSwap.weps[1] = MPLoadoutWeaponSwap.weps[0];
                     }
 
                     foreach (var missile in loadout.missiles)
@@ -409,29 +409,29 @@ namespace GameMod
                     // set the appropriate swapper weapons
                     if (NetworkMatch.m_force_loadout == 1)
                     {
-                        MPLoadoutWeaponSwapper.weps[0] = (int)NetworkMatch.m_force_w1;
+                        MPLoadoutWeaponSwap.weps[0] = (int)NetworkMatch.m_force_w1;
 
                         if (NetworkMatch.m_force_w2 != WeaponType.NUM)
                         {
-                            MPLoadoutWeaponSwapper.weps[1] = (int)NetworkMatch.m_force_w2;
+                            MPLoadoutWeaponSwap.weps[1] = (int)NetworkMatch.m_force_w2;
                         }
                         else
                         {
-                            MPLoadoutWeaponSwapper.weps[1] = (int)NetworkMatch.m_force_w1;
+                            MPLoadoutWeaponSwap.weps[1] = (int)NetworkMatch.m_force_w1;
                         }
                     }
                     else
                     {
                         int idx = ((!use_loadout1) ? loadout_data.m_mp_loadout2 : loadout_data.m_mp_loadout1);
-                        MPLoadoutWeaponSwapper.weps[0] = (int)loadout_data.GetMpLoadoutWeapon1(idx);
-                        MPLoadoutWeaponSwapper.weps[1] = (int)loadout_data.GetMpLoadoutWeapon2(idx);
-                        if (MPLoadoutWeaponSwapper.weps[1] == (int)WeaponType.NUM)
+                        MPLoadoutWeaponSwap.weps[0] = (int)loadout_data.GetMpLoadoutWeapon1(idx);
+                        MPLoadoutWeaponSwap.weps[1] = (int)loadout_data.GetMpLoadoutWeapon2(idx);
+                        if (MPLoadoutWeaponSwap.weps[1] == (int)WeaponType.NUM)
                         {
-                            MPLoadoutWeaponSwapper.weps[1] = MPLoadoutWeaponSwapper.weps[0];
+                            MPLoadoutWeaponSwap.weps[1] = MPLoadoutWeaponSwap.weps[0];
                         }
                     }
                 }
-                MPLoadoutWeaponSwapper.selected = 0;
+                MPLoadoutWeaponSwap.selected = 0;
             }
         }
 
