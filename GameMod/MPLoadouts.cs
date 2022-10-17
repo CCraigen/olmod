@@ -670,6 +670,7 @@ namespace GameMod
         }
     }
 
+    /*
     // process the loadout selection -- uses hotkeys for selecting primary weapon slots 1-4
     [HarmonyPatch(typeof(PlayerShip), "Update")]
     internal class MPLoadouts_PlayerShip_Update
@@ -728,4 +729,5 @@ namespace GameMod
             }
         }
     }
+    */
 }
