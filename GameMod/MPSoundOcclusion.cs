@@ -17,6 +17,10 @@ namespace GameMod
 
 		// Change this at your peril, gotta recalculate the curves if you do
 		public const float MINDIST = 15f;
+
+		public static float CutoffFreq;
+		public static float BoostAmount;
+		public static bool Occluded;
 	}
 
 	[HarmonyPatch(typeof(UnityAudio), "CreateAudioSourceAndObject")]
@@ -57,6 +61,54 @@ namespace GameMod
 		}
 	}
 
+	// Sets a bool for use with Occlusion in the Cue play commands since they can fire off several layers simultaneously.
+	// Previously this was resulting in several Linecasts from the same position. Should make things more efficient by allowing
+	// the PlaySound method to only do the check once for each cue.
+	[HarmonyPatch(typeof(SFXCueManager), "PlayCue2D")]
+	internal class MPSoundOcclusion_SFXCueManager_PlayCue2D
+	{
+		static void Prefix()
+		{
+			MPSoundExt.CueState = 1;
+		}
+
+		static void Postfix()
+		{
+			MPSoundExt.CueState = 0;
+		}
+	}
+
+	// same here as above with PlayCue2D
+	[HarmonyPatch(typeof(SFXCueManager), "PlayCuePos")]
+	internal class MPSoundOcclusion_SFXCueManager_PlayCuePos
+	{
+		static void Prefix()
+		{
+			MPSoundExt.CueState = 1;
+		}
+
+		static void Postfix()
+		{
+			MPSoundExt.CueState = 0;
+		}
+	}
+
+	// same here as above with the PlayCue methods
+	[HarmonyPatch(typeof(SFXCueManager), "PlayThunderboltFire")]
+	internal class MPSoundOcclusion_SFXCueManager_PlayThunderboltFire
+	{
+		static void Prefix()
+		{
+			MPSoundExt.CueState = 1;
+		}
+
+		static void Postfix()
+		{
+			MPSoundExt.CueState = 0;
+		}
+	}
+
+	// Main logic happens here
 	[HarmonyPatch(typeof(UnityAudio), "PlaySound")]
 	internal class MPSoundOcclusion_UnityAudio_PlaySound
 	{
@@ -77,59 +129,66 @@ namespace GameMod
 
 		static void Postfix(int __result, Vector3 pos3d)
 		{	
-			if (__result != -1)
+			if (__result != -1) // if -1 then we ran out of audio slots, skip the whole thing
 			{
-				if (Menus.mms_audio_occlusion_strength != 0)
+				// If pos3d == Vector3.zero, then it's almost without a doubt a 2D cue on the local client. It's beyond infeasible that sound could accidentally come from *exactly* this point.
+				// If it ever does, well then you get 1 glitched cue and you should have bought a lottery ticke
+				if (Menus.mms_audio_occlusion_strength == 0 || pos3d == Vector3.zero)
+                {
+					MPSoundOcclusion.Occluded = false;
+                }
+				else
 				{
 					if ((!MPObserver.Enabled || MPObserver.ObservedPlayer != null) && !GameplayManager.IsDedicatedServer()) // last check probably not necessary but whatever
 					{
-						RaycastHit ray1;
-
-						Vector3 shipPos = GameManager.m_player_ship.transform.localPosition;
-
-						// If pos3d = Vector3.zero, then it's almost without a doubt a 2D cue on the local client. It's beyond infeasible that sound could accidentally come from *exactly* this point.
-						// If it ever does, well then you get 1 glitched cue and you should have bought a lottery ticket.
-						if (pos3d != Vector3.zero && Physics.Linecast(pos3d, shipPos, out ray1, 67256320)) // check line-of-sight to sound source.
+						// if we're mid-cue there's multiple sounds being played from the same location - use the previous Linecast calculations for efficiency
+						if (MPSoundExt.CueState < 2)
 						{
-							// we don't have line-of-sight
-							// This is the "Tier 3" approach, taking both distance to target and thickness of obstruction into account
+							Vector3 shipPos = GameManager.m_player_ship.transform.localPosition;
 
-							//Debug.Log("CCC occlusion factor " + Menus.mms_audio_occlusion_strength);
+							RaycastHit ray1;
+							if (Physics.Linecast(pos3d, shipPos, out ray1, 67256320))
+							{
+								// we don't have line-of-sight
+								// This is the "Tier 3" approach, taking both distance to target and thickness of obstruction into account
+								RaycastHit ray2;
+								Physics.Linecast(shipPos, pos3d, out ray2, 67256320);
 
-							float maxdist = MPSoundOcclusion.MAXDISTS[Menus.mms_audio_occlusion_strength];
-							float cutoff = MPSoundOcclusion.CUTOFFS[Menus.mms_audio_occlusion_strength];
-							float lowfreq = MPSoundOcclusion.LOWFREQS[Menus.mms_audio_occlusion_strength];
-							float boost = MPSoundOcclusion.BOOSTS[Menus.mms_audio_occlusion_strength];
+								float maxdist = MPSoundOcclusion.MAXDISTS[Menus.mms_audio_occlusion_strength];
+								float cutoff = MPSoundOcclusion.CUTOFFS[Menus.mms_audio_occlusion_strength];
+								float lowfreq = MPSoundOcclusion.LOWFREQS[Menus.mms_audio_occlusion_strength];
+								float boost = MPSoundOcclusion.BOOSTS[Menus.mms_audio_occlusion_strength];
 
-							float p2pDist = Vector3.Distance(pos3d, shipPos); // point to point distance
-							RaycastHit ray2;
-							Physics.Linecast(shipPos, pos3d, out ray2, 67256320);
-							float thick = Mathf.Clamp(p2pDist - ray1.distance - ray2.distance, 1f, maxdist); // how thick the obstruction is, clamped
-							p2pDist = Mathf.Clamp(p2pDist, MPSoundOcclusion.MINDIST, maxdist); // clamp the p2pDist value
-							float factor = (maxdist - (0.6f * thick + 0.4f * p2pDist)) / (maxdist);
+								float p2pDist = Vector3.Distance(pos3d, shipPos); // point to point distance
 
-							MPSoundExt.m_a_filter[__result].cutoffFrequency = lowfreq + (cutoff * factor * factor); // exponential curve
+								float thick = Mathf.Clamp(p2pDist - ray1.distance - ray2.distance, 1f, maxdist); // how thick the obstruction is, clamped
+								p2pDist = Mathf.Clamp(p2pDist, MPSoundOcclusion.MINDIST, maxdist); // clamp the p2pDist value
+								float factor = (maxdist - (0.6f * thick + 0.4f * p2pDist)) / (maxdist);
 
-							//Debug.Log("CCC playing occluded, factor " + factor);
-							//Debug.Log("CCC playing occluded, original volume " + MPSoundOcclusion.m_a_source[__result].volume);
-
-							MPSoundExt.m_a_source[__result].volume = MPSoundExt.m_a_source[__result].volume + boost * (0.85f - factor); // slight boost to volume as range increases to counter the HF rolloff
-							MPSoundExt.m_a_filter[__result].enabled = true;
-
-							//Debug.Log("CCC playing occluded, new volume " + MPSoundOcclusion.m_a_source[__result].volume);
-							//Debug.Log("CCC playing occluded, distance " + p2pDist +", thickness " + thick + ", factor is " + factor + ", cutoff frequency is " + MPSoundOcclusion.m_a_filter[__result].cutoffFrequency);
+								MPSoundOcclusion.CutoffFreq = lowfreq + (cutoff * factor * factor); // exponential curve
+								MPSoundOcclusion.BoostAmount = boost * (0.85f - factor);
+								MPSoundOcclusion.Occluded = true;
+							}
+							else
+							{
+								MPSoundOcclusion.Occluded = false;
+							}
 						}
-						else
-						{
-							// we have line-of-sight, restore the normal filter
-							MPSoundExt.m_a_filter[__result].cutoffFrequency = 22000f;
-							MPSoundExt.m_a_filter[__result].enabled = false;
+						if (MPSoundExt.CueState == 1) // we're in a multicue, pause calculations
+                        {
+							MPSoundExt.CueState = 2;
 						}
 					}
 				}
+				if (MPSoundOcclusion.Occluded)
+				{
+					MPSoundExt.m_a_filter[__result].cutoffFrequency = MPSoundOcclusion.CutoffFreq;
+					MPSoundExt.m_a_source[__result].volume = MPSoundExt.m_a_source[__result].volume + MPSoundOcclusion.BoostAmount; // slight boost to volume as range increases to counter the HF rolloff
+					MPSoundExt.m_a_filter[__result].enabled = true;
+				}
 				else
-                {
-					// restore the filter since we're disabled and they may have been set previously
+				{
+					// restore the normal filter
 					MPSoundExt.m_a_filter[__result].cutoffFrequency = 22000f;
 					MPSoundExt.m_a_filter[__result].enabled = false;
 				}
