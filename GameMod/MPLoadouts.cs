@@ -210,6 +210,7 @@ namespace GameMod
             LoadoutDataMessage loadoutDataMessage = new LoadoutDataMessage();
             loadoutDataMessage.lobby_id = NetworkMatch.m_my_lobby_id;
             loadoutDataMessage.selected_idx = Menus.mms_selected_loadout_idx;
+            Debug.Log("CCC SendPlayerLoadoutToServer selected_idx: " + loadoutDataMessage.selected_idx);
             loadoutDataMessage.loadouts = MPLoadouts.Loadouts.ToList();
             Client.GetClient().Send(MessageTypes.MsgCustomLoadouts, loadoutDataMessage);
         }
@@ -227,6 +228,7 @@ namespace GameMod
             MPLoadouts.SetCustomLoadoutMessage clm = new MPLoadouts.SetCustomLoadoutMessage();
             clm.lobby_id = NetworkMatch.m_my_lobby_id;
             clm.selected_idx = idx;
+            Debug.Log("CCC SendCustomLoadoutToServer selected_idx: " + clm.selected_idx);
             Client.GetClient().Send(MessageTypes.MsgSetCustomLoadout, clm);
         }
     }
@@ -262,6 +264,7 @@ namespace GameMod
                     foreach (var kvp in MPLoadouts.NetworkLoadouts)
                     {
                         NetworkServer.SendToClient(player.connectionToClient.connectionId, MessageTypes.MsgCustomLoadouts, kvp.Value);
+                        Debug.Log("CCC SendLoadoutDataToClients lobby_id: " + kvp.Key + " selected_idx: " + kvp.Value.selected_idx);
                     }
                 }
             }
@@ -293,13 +296,29 @@ namespace GameMod
                     .Where(x => !x.weapons.Contains(WeaponType.REFLEX))
                     .ToList()
                     .ForEach(x => x.weapons.Add(WeaponType.REFLEX));
+
+                Debug.Log("CCC SERVER OnCustomLoadoutDataMessage lobby_id " + msg.lobby_id);
             }
 
             private static void OnSetCustomLoadoutMessage(NetworkMessage rawMsg)
             {
                 var msg = rawMsg.ReadMessage<MPLoadouts.SetCustomLoadoutMessage>();
                 if (MPLoadouts.NetworkLoadouts.ContainsKey(msg.lobby_id))
+                    //MPLoadouts.NetworkLoadouts[msg.lobby_id].selected_idx = msg.selected_idx;
+                {
                     MPLoadouts.NetworkLoadouts[msg.lobby_id].selected_idx = msg.selected_idx;
+
+                    foreach (var player in Overload.NetworkManager.m_Players.Where(x => x.connectionToClient.connectionId > 0))
+                    {
+                        if (MPTweaks.ClientHasTweak(player.connectionToClient.connectionId, "customloadouts"))
+                        {
+                                NetworkServer.SendToClient(player.connectionToClient.connectionId, MessageTypes.MsgSetCustomLoadout, msg);
+                                Debug.Log("CCC Sending CustomLoadoutMessage lobby_id: " + msg.lobby_id + " selected_idx: " + msg.selected_idx);
+                        }
+                    }
+                }
+
+                Debug.Log("CCC SERVER OnSetCustomLoadoutMessage lobby_id " + msg.lobby_id + " first weapon " + MPLoadouts.NetworkLoadouts[msg.lobby_id].loadouts[MPLoadouts.NetworkLoadouts[msg.lobby_id].selected_idx].weapons[0]);
             }
         }
     }
@@ -327,6 +346,8 @@ namespace GameMod
             {
                 MPLoadouts.NetworkLoadouts[msg.lobby_id] = msg;
             }
+
+            Debug.Log("CCC CLIENT " + NetworkMatch.m_my_lobby_id + " OnCustomLoadoutDataMessage " + msg.lobby_id);
         }
 
         private static void OnSetCustomLoadoutMessage(NetworkMessage rawMsg)
@@ -334,6 +355,30 @@ namespace GameMod
             var msg = rawMsg.ReadMessage<MPLoadouts.SetCustomLoadoutMessage>();
             if (MPLoadouts.NetworkLoadouts.ContainsKey(msg.lobby_id))
                 MPLoadouts.NetworkLoadouts[msg.lobby_id].selected_idx = msg.selected_idx;
+
+            Debug.Log("CCC CLIENT " + NetworkMatch.m_my_lobby_id + " OnSetCustomLoadoutMessage lobby_id " + msg.lobby_id + " first weapon " + MPLoadouts.NetworkLoadouts[msg.lobby_id].loadouts[MPLoadouts.NetworkLoadouts[msg.lobby_id].selected_idx].weapons[0]);
+        }
+    }
+
+    // CCCCCC
+    [HarmonyPatch(typeof(PlayerShip), "DoSpawnEffects")]
+    internal class MPLoadouts_PlayerShip_DoSpawnEffects
+    {
+        static void Postfix(PlayerShip __instance)
+        {
+            Debug.Log("CCC respawning, ship equipped weapon is " + __instance.c_player.m_weapon_type.ToString());
+        }
+    }
+
+    [HarmonyPatch(typeof(PlayerShip), "ProcessFiringControls")]
+    internal class MPLoadouts_PlayerShip_ProcessFiringControls
+    {
+        static void Postfix(PlayerShip __instance)
+        {
+            if (__instance.c_player.JustPressed(CCInput.FIRE_WEAPON))
+            {
+                Debug.Log("CCC firing, ship equipped weapon is " + __instance.c_player.m_weapon_type.ToString());
+            }
         }
     }
 
@@ -423,8 +468,16 @@ namespace GameMod
                     player.m_missile_ammo[(int)missile] = Player.MP_DEFAULT_MISSILE_AMMO[(int)missile];
                 }
 
+                Debug.Log("CCC CLIENT " + NetworkMatch.m_my_lobby_id + " spawning loadout idx according to network: " + loadout_data.selected_idx);
+                Debug.Log("CCC CLIENT " + NetworkMatch.m_my_lobby_id + " spawning loadout idx according to local: " + loadout_idx);
+                Debug.Log("CCC SetMultiplayerLoadout lobby_id " + lobby_id + " first weapon " + MPLoadouts.NetworkLoadouts[lobby_id].loadouts[loadout_data.selected_idx].weapons[0]);
+
+                Debug.Log("CCC pre-set --- current weapon " + player.m_weapon_type.ToString() + ", current Network weapon " + player.Networkm_weapon_type.ToString());
+
                 player.Networkm_weapon_type = loadout.weapons[0];
                 player.Networkm_missile_type = loadout.missiles[0];
+
+                Debug.Log("CCC post-set -- current weapon " + player.m_weapon_type.ToString() + ", current Network weapon " + player.Networkm_weapon_type.ToString());
             }
             if (player.isLocalPlayer)
             {
@@ -433,6 +486,7 @@ namespace GameMod
             }
             player.m_ammo += ((num2 <= 1) ? ((num2 <= 0) ? 0 : 200) : 300);
             player.UpdateCurrentWeaponName();
+            Debug.Log("CCC post-cmd -- current weapon " + player.m_weapon_type.ToString() + ", current Network weapon " + player.Networkm_weapon_type.ToString());
             if (player.isLocalPlayer)
             {
                 player.CallCmdSetCurrentMissile(player.m_missile_type);
@@ -494,10 +548,10 @@ namespace GameMod
 
         static void SetMultiplayerLoadoutAndModifiers(Player player, LoadoutDataMessage loadout_data, bool use_loadout1, int lobby_id)
         {
-
             if (MPLoadouts.NetworkLoadouts.ContainsKey(lobby_id))
             {
-                var loadout_idx = GameplayManager.IsDedicatedServer() ? MPLoadouts.NetworkLoadouts[lobby_id].selected_idx : Menus.mms_selected_loadout_idx;
+                //var loadout_idx = GameplayManager.IsDedicatedServer() ? MPLoadouts.NetworkLoadouts[lobby_id].selected_idx : Menus.mms_selected_loadout_idx;
+                var loadout_idx = player.isLocalPlayer ? Menus.mms_selected_loadout_idx : MPLoadouts.NetworkLoadouts[lobby_id].selected_idx;
                 SetMultiplayerModifiers(player, loadout_data, use_loadout1);
                 SetMultiplayerLoadout(player, lobby_id, loadout_idx);
             }
@@ -682,18 +736,22 @@ namespace GameMod
                 {
                     if (Controls.JustPressed(CCInput.WEAPON_1x2))
                     {
+                        //ps.c_player.CallCmdToggleLoadout();
                         MPLoadouts.SendCustomLoadoutToServer(0);
                     }
                     else if (Controls.JustPressed(CCInput.WEAPON_3x4))
                     {
+                        //ps.c_player.CallCmdToggleLoadout();
                         MPLoadouts.SendCustomLoadoutToServer(1);
                     }
                     else if (Controls.JustPressed(CCInput.WEAPON_5x6))
                     {
+                        //ps.c_player.CallCmdToggleLoadout();
                         MPLoadouts.SendCustomLoadoutToServer(2);
                     }
                     else if (Controls.JustPressed(CCInput.WEAPON_7x8))
                     {
+                        //ps.c_player.CallCmdToggleLoadout();
                         MPLoadouts.SendCustomLoadoutToServer(3);
                     }
                 }

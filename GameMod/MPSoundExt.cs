@@ -24,7 +24,6 @@ namespace GameMod
     public static class MPSoundExt
     {
         //public static AssetBundle ab;
-        public static int CueState = 0;
 
         public static AudioSource[] m_a_source = new AudioSource[512];
         public static AudioLowPassFilter[] m_a_filter = new AudioLowPassFilter[512];

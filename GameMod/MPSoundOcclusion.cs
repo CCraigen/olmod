@@ -8,11 +8,11 @@ namespace GameMod
 {
 	public static class MPSoundOcclusion
     {	
-		//									N/A		LOW		MED		STRONG			
-		public static float[] MAXDISTS =	{ 0f,	100f,	95f,	85f };
-		public static float[] BOOSTS =		{ 0f,	0.15f,	0.20f,	0.25f };
-		public static float[] LOWFREQS =	{ 0f,	800f,	500f ,	500f };
-		public static float[] CUTOFFS =		{ 0f,	9500f,	10000f,	10500f };
+		//                                    N/A   LOW     MED     STRONG			
+		public static float[] MAXDISTS =    { 0f,   110f,   100f,   95f };    // xtra strong 85f
+		public static float[] BOOSTS =      { 0f,   0.10f,  0.15f,  0.20f };  // xtra strong 0.25f
+		public static float[] LOWFREQS =    { 0f,   950f,   800f,   500f };   // xtra strong 500f
+		public static float[] CUTOFFS =     { 0f,   9000f,  9500f,  10000f }; // xtra strong 10500f
 		// actual cutoff starting point is currently targetted at ~7khz since we are clamping to 15 units minimum distance below
 
 		// Change this at your peril, gotta recalculate the curves if you do
@@ -20,6 +20,8 @@ namespace GameMod
 
 		public static float CutoffFreq;
 		public static float BoostAmount;
+
+		public static int CueState = 0;
 		public static bool Occluded;
 	}
 
@@ -61,54 +63,49 @@ namespace GameMod
 		}
 	}
 
-	// Sets a bool for use with Occlusion in the Cue play commands since they can fire off several layers simultaneously.
+	// Sets an int to track state for use with Occlusion in the Cue play commands since they can fire off several layers simultaneously.
 	// Previously this was resulting in several Linecasts from the same position. Should make things more efficient by allowing
 	// the PlaySound method to only do the check once for each cue.
-	[HarmonyPatch(typeof(SFXCueManager), "PlayCue2D")]
-	internal class MPSoundOcclusion_SFXCueManager_PlayCue2D
+	// Needs to patch PlayCue2D, PlayCuePos, and PlayThunderboltFire. See the next method.
+	public class MPSoundOcclusion_SFXCueManager_PlayCuePatch
 	{
-		static void Prefix()
+		public static void Prefix()
 		{
-			MPSoundExt.CueState = 1;
+			MPSoundOcclusion.CueState = 1;
 		}
 
-		static void Postfix()
+		public static void Postfix()
 		{
-			MPSoundExt.CueState = 0;
+			MPSoundOcclusion.CueState = 0;
 		}
 	}
 
-	// same here as above with PlayCue2D
-	[HarmonyPatch(typeof(SFXCueManager), "PlayCuePos")]
-	internal class MPSoundOcclusion_SFXCueManager_PlayCuePos
+	// This whole nonsense is because SXFCueManager is a static class with a static constructor. All sorts of fun breakage
+	// using the regular patch method because the constructor ends up calling too early and there's nothing you can do
+	// to prevent it. You need to patch waaaaay at the end of the process and this seems to be the only way to force it to
+	// do this, as recommended by the Harmony devs on Discord.
+	[HarmonyPatch(typeof(PilotManager), "Initialize")]
+	class MPSoundOcclusion_PilotManager_Initialize
 	{
-		static void Prefix()
-		{
-			MPSoundExt.CueState = 1;
-		}
-
 		static void Postfix()
-		{
-			MPSoundExt.CueState = 0;
+        {
+			var harmony = new Harmony("olmod.postpatcher");
+
+			var orig1 = typeof(SFXCueManager).GetMethod("PlayCue2D");
+			var orig2 = typeof(SFXCueManager).GetMethod("PlayCuePos");
+			var orig3 = typeof(SFXCueManager).GetMethod("PlayThunderboltFire");
+
+			var prefix = typeof(MPSoundOcclusion_SFXCueManager_PlayCuePatch).GetMethod("Prefix");
+			var postfix = typeof(MPSoundOcclusion_SFXCueManager_PlayCuePatch).GetMethod("Postfix");
+
+			harmony.Patch(orig1, new HarmonyMethod(prefix), new HarmonyMethod(postfix));
+			harmony.Patch(orig2, new HarmonyMethod(prefix), new HarmonyMethod(postfix));
+			harmony.Patch(orig3, new HarmonyMethod(prefix), new HarmonyMethod(postfix));
 		}
 	}
 
-	// same here as above with the PlayCue methods
-	[HarmonyPatch(typeof(SFXCueManager), "PlayThunderboltFire")]
-	internal class MPSoundOcclusion_SFXCueManager_PlayThunderboltFire
-	{
-		static void Prefix()
-		{
-			MPSoundExt.CueState = 1;
-		}
-
-		static void Postfix()
-		{
-			MPSoundExt.CueState = 0;
-		}
-	}
-
-	// Main logic happens here
+	// Now that that whole flustercluck is out of the way...
+	// Main logic starts happening here
 	[HarmonyPatch(typeof(UnityAudio), "PlaySound")]
 	internal class MPSoundOcclusion_UnityAudio_PlaySound
 	{
@@ -142,7 +139,7 @@ namespace GameMod
 					if ((!MPObserver.Enabled || MPObserver.ObservedPlayer != null) && !GameplayManager.IsDedicatedServer()) // last check probably not necessary but whatever
 					{
 						// if we're mid-cue there's multiple sounds being played from the same location - use the previous Linecast calculations for efficiency
-						if (MPSoundExt.CueState < 2)
+						if (MPSoundOcclusion.CueState < 2)
 						{
 							Vector3 shipPos = GameManager.m_player_ship.transform.localPosition;
 
@@ -174,9 +171,9 @@ namespace GameMod
 								MPSoundOcclusion.Occluded = false;
 							}
 						}
-						if (MPSoundExt.CueState == 1) // we're in a multicue, pause calculations
+						if (MPSoundOcclusion.CueState == 1) // we're in a multicue, pause calculations
                         {
-							MPSoundExt.CueState = 2;
+							MPSoundOcclusion.CueState = 2;
 						}
 					}
 				}
