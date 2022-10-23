@@ -299,7 +299,17 @@ namespace GameMod
             {
                 var msg = rawMsg.ReadMessage<MPLoadouts.SetCustomLoadoutMessage>();
                 if (MPLoadouts.NetworkLoadouts.ContainsKey(msg.lobby_id))
+                {
                     MPLoadouts.NetworkLoadouts[msg.lobby_id].selected_idx = msg.selected_idx;
+
+                    foreach (var player in Overload.NetworkManager.m_Players.Where(x => x.connectionToClient.connectionId > 0))
+                    {
+                        if (MPTweaks.ClientHasTweak(player.connectionToClient.connectionId, "customloadouts"))
+                        {
+                                NetworkServer.SendToClient(player.connectionToClient.connectionId, MessageTypes.MsgSetCustomLoadout, msg);
+                        }
+                    }
+                }
             }
         }
     }
@@ -494,10 +504,10 @@ namespace GameMod
 
         static void SetMultiplayerLoadoutAndModifiers(Player player, LoadoutDataMessage loadout_data, bool use_loadout1, int lobby_id)
         {
-
             if (MPLoadouts.NetworkLoadouts.ContainsKey(lobby_id))
             {
-                var loadout_idx = GameplayManager.IsDedicatedServer() ? MPLoadouts.NetworkLoadouts[lobby_id].selected_idx : Menus.mms_selected_loadout_idx;
+                //var loadout_idx = GameplayManager.IsDedicatedServer() ? MPLoadouts.NetworkLoadouts[lobby_id].selected_idx : Menus.mms_selected_loadout_idx;
+                var loadout_idx = player.isLocalPlayer ? Menus.mms_selected_loadout_idx : MPLoadouts.NetworkLoadouts[lobby_id].selected_idx;
                 SetMultiplayerModifiers(player, loadout_data, use_loadout1);
                 SetMultiplayerLoadout(player, lobby_id, loadout_idx);
             }
@@ -676,26 +686,95 @@ namespace GameMod
     {
         public static void LoadoutSelect(PlayerShip ps)
         {
-            if (!PlayerShip.m_typing_in_chat)
+            if (!PlayerShip.m_typing_in_chat && NetworkMatch.m_force_loadout == 0 && (float)ps.m_dying_timer < 2.5f)
             {
-                if (NetworkMatch.m_force_loadout == 0 && (float)ps.m_dying_timer < 2.5f)
+                switch (Menus.mms_loadout_hotkeys)
                 {
-                    if (Controls.JustPressed(CCInput.WEAPON_1x2))
-                    {
-                        MPLoadouts.SendCustomLoadoutToServer(0);
-                    }
-                    else if (Controls.JustPressed(CCInput.WEAPON_3x4))
-                    {
-                        MPLoadouts.SendCustomLoadoutToServer(1);
-                    }
-                    else if (Controls.JustPressed(CCInput.WEAPON_5x6))
-                    {
-                        MPLoadouts.SendCustomLoadoutToServer(2);
-                    }
-                    else if (Controls.JustPressed(CCInput.WEAPON_7x8))
-                    {
-                        MPLoadouts.SendCustomLoadoutToServer(3);
-                    }
+                    // weapon selection using Primary 1/2, 3/4, 5/6, 7/8
+                    case 1:
+                        if (Controls.JustPressed(CCInput.WEAPON_1x2))
+                        {
+                            MPLoadouts.SendCustomLoadoutToServer(0);
+                            MenuManager.PlayCycleSound();
+                        }
+                        else if (Controls.JustPressed(CCInput.WEAPON_3x4))
+                        {
+                            MPLoadouts.SendCustomLoadoutToServer(1);
+                            MenuManager.PlayCycleSound();
+                        }
+                        else if (Controls.JustPressed(CCInput.WEAPON_5x6))
+                        {
+                            MPLoadouts.SendCustomLoadoutToServer(2);
+                            MenuManager.PlayCycleSound();
+                        }
+                        else if (Controls.JustPressed(CCInput.WEAPON_7x8))
+                        {
+                            MPLoadouts.SendCustomLoadoutToServer(3);
+                            MenuManager.PlayCycleSound();
+                        }
+                        break;
+
+                    // weapon selection using Primary 1, 2, 3, 4
+                    case 2:
+                        if (Controls.JustPressed(CCInput.WEAPON_1x2))
+                        {
+                            if (Controls.BothAssigned(CCInput.WEAPON_1x2))
+                            {
+                                if (Controls.PressedSlot(CCInput.WEAPON_1x2, 0))
+                                {
+                                    MPLoadouts.SendCustomLoadoutToServer(0);
+                                }
+                                else
+                                {
+                                    MPLoadouts.SendCustomLoadoutToServer(1);
+                                }
+                                MenuManager.PlayCycleSound();
+                            }
+                        }
+                        else if (Controls.JustPressed(CCInput.WEAPON_3x4))
+                        {
+                            if (Controls.BothAssigned(CCInput.WEAPON_3x4))
+                            {
+                                if (Controls.PressedSlot(CCInput.WEAPON_3x4, 0))
+                                {
+                                    MPLoadouts.SendCustomLoadoutToServer(2);
+                                }
+                                else
+                                {
+                                    MPLoadouts.SendCustomLoadoutToServer(3);
+                                }
+                                MenuManager.PlayCycleSound();
+                            }
+                        }
+                        break;
+
+                    // weapon selection using number & numpad keys 1-4 on the keyboard only
+                    case 3:
+                        if (Input.GetKeyDown(KeyCode.Alpha1) || Input.GetKeyDown(KeyCode.Keypad1))
+                        {
+                            MPLoadouts.SendCustomLoadoutToServer(0);
+                            MenuManager.PlayCycleSound();
+                        }
+                        else if (Input.GetKeyDown(KeyCode.Alpha2) || Input.GetKeyDown(KeyCode.Keypad2))
+                        {
+                            MPLoadouts.SendCustomLoadoutToServer(1);
+                            MenuManager.PlayCycleSound();
+                        }
+                        else if (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3))
+                        {
+                            MPLoadouts.SendCustomLoadoutToServer(2);
+                            MenuManager.PlayCycleSound();
+                        }
+                        else if (Input.GetKeyDown(KeyCode.Alpha4) || Input.GetKeyDown(KeyCode.Keypad4))
+                        {
+                            MPLoadouts.SendCustomLoadoutToServer(3);
+                            MenuManager.PlayCycleSound();
+                        }
+                        break;
+
+                    // disabled
+                    default:
+                        break;
                 }
             }
         }
