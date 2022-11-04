@@ -100,6 +100,7 @@
     <Compile Include="AddOnLevelSort.cs" />
     <Compile Include="AmbientUnload.cs" />
     <Compile Include="AxisCountFix.cs" />
+    <Compile Include="MPWeaponCycling.cs" />
     <Compile Include="Config.cs" />
     <Compile Include="Console.cs" />
     <Compile Include="Controllers.cs" />
