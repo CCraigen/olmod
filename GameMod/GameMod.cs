@@ -82,6 +82,8 @@ namespace GameMod.Core {
             if (FindArg("-poor-mans-profiler")) {
                 PoorMansProfiler.Initialize(harmony);
             }
+
+
         }
 
         public static bool FindArg(string arg)
@@ -105,6 +107,11 @@ namespace GameMod.Core {
             return GameVersion.CompareTo(new Version(1, 0, 1885)) >= 0;
         }
 
+        public static void ConsoleExitCalled()
+        {
+            Debug.Log("=== OLmod exitting due to console signal ===");
+            Application.Quit();
+        }
     }
 
     [HarmonyPatch(typeof(LocalLANHost), "GetServerLocation")]

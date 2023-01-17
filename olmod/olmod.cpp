@@ -3,6 +3,7 @@
 
 #include "stdafx.h"
 #include "olmod.h"
+#include <csignal>
 
 // Hint that the discrete gpu should be enabled on optimus/enduro systems
 // NVIDIA docs: http://developer.download.nvidia.com/devzone/devcenter/gamegraphics/files/OptimusRenderingPolicies.pdf
@@ -509,7 +510,31 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 		show_msg("GetProcAddress hook failed\n");
 		return 1;
 	}
+
+	//signal(SIGINT, SignalHandler);
+	//signal(SIGBREAK, SignalHandler);
+	//SetConsoleCtrlHandler(CTRLHandler, true);
+
 	return UnityMain(hInstance, hPrevInstance, lpCmdLine, nShowCmd);
+}
+
+__declspec(dllexport) void ConsoleExitCalled(int* value)
+{
+	//GameMod::Core:: work;
+	//work.ShowCSharpMessageBox(value);
+}
+
+void SignalHandler(int signal)
+{
+	if (gamemod_img) {
+		run_void_method(gamemod_img, "GameMod.Core", "GameMod", "ConsoleExitCalled");
+	}
+}
+
+BOOL WINAPI CTRLHandler(DWORD signal)
+{
+	SignalHandler((int)signal);
+	return true;
 }
 
 // From LIBCTINY - Matt Pietrek 2001, MSDN Magazine, January 2001, CRT0TWIN.CPP
