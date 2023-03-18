@@ -27,6 +27,8 @@ namespace GameMod
 
         public static bool loading = false; // set to true during the loading process
 
+        public static bool ODTurnUnrestricted = true;
+
         public static void AddShips()
         {
             // ship prefabs are explicitly added here
@@ -120,6 +122,45 @@ namespace GameMod
         {
             MPShips.AddShips();
             MPShips.LoadResources();
+        }
+    }
+
+    // allows disabling of the boosted turning with Overdrive
+    [HarmonyPatch(typeof(PlayerShip), "FixedUpdateProcessControlsInternal")]
+    static class MPShips_PlayerShip_FixedUpdateProcessControlsInternal
+    {
+        static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> codes, ILGenerator gen)
+        {
+            //bool turn_found = false;
+            Label label1 = gen.DefineLabel();
+            Label label2 = gen.DefineLabel();
+            bool LabelNext = false;
+
+            foreach (var code in codes)
+            {
+                // allow disabling of the turn speed boost that comes with overdrive -- I *think* this needs to happen server-side as well unfortunately
+                if (code.opcode == OpCodes.Ldc_R4 && (float)code.operand == 1.05f)
+                {
+                    //turn_found = true;
+                    yield return new CodeInstruction(OpCodes.Ldsfld, AccessTools.Field(typeof(MPShips), "ODTurnUnrestricted"));
+                    yield return new CodeInstruction(OpCodes.Brtrue, label1);
+                    yield return new CodeInstruction(OpCodes.Ldc_R4, 1f);
+                    yield return new CodeInstruction(OpCodes.Br, label2);
+                    code.labels.Add(label1);
+                    yield return code;
+                    LabelNext = true;
+                }
+                else if (LabelNext)
+                {
+                    code.labels.Add(label2);
+                    yield return code;
+                    LabelNext = false;
+                }
+                else
+                {
+                    yield return code;
+                }
+            }
         }
     }
 }

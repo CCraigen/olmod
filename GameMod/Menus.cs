@@ -42,7 +42,20 @@ namespace GameMod {
         public static bool mms_damage_numbers { get; set; }
         public static bool mms_client_damage_numbers { get; set; } = true;
         public static bool mms_assist_scoring { get; set; } = true;
-        public static bool mms_team_color_default { get; set; } = true;
+
+        public static bool mms_team_color_default_menu = true;
+        public static bool mms_team_color_default
+        {
+            get
+            {
+                return ( MPModPrivateData.MatchMode == ExtMatchMode.CTF) ? true : mms_team_color_default_menu;
+            }
+            set
+            {
+                mms_team_color_default_menu = value;
+            }
+        }
+
         public static int mms_team_color_self = 5;
         public static int mms_team_color_enemy = 6;
         public static bool mms_creeper_colors { get; set; } = true;
@@ -167,6 +180,18 @@ namespace GameMod {
             }
         }
 
+        public static string GetMMSODTurning()
+        {
+            if (MPShips.ODTurnUnrestricted)
+            {
+                return "ON";
+            }
+            else
+            {
+                return "OFF";
+            }    
+        }
+
         public static string GetMMSLagCompensation()
         {
             switch (mms_lag_compensation)
@@ -215,7 +240,7 @@ namespace GameMod {
 
         public static string GetMMSTeamColorDefault()
         {
-            return mms_team_color_default ? Loc.LS("DEFAULT") : Loc.LS("CUSTOM");
+            return mms_team_color_default_menu ? Loc.LS("DEFAULT") : Loc.LS("CUSTOM");
         }
 
         public static string GetMMSTeamColorSelf()
@@ -726,11 +751,11 @@ namespace GameMod {
                 case 1:
                     __instance.SelectAndDrawStringOptionItem(Loc.LS("TEAMMATE NAMES"), position, 0, MenuManager.GetMPTeammateNames(), string.Empty, 1.5f, false);
                     position.y += 62f;
-                    __instance.SelectAndDrawStringOptionItem(Loc.LS("TEAM COLORS"), position, 1, Menus.GetMMSTeamColorDefault(), "DISPLAY TEAM COLORS IN DEFAULT ORANGE/BLUE OR CUSTOM", 1.5f, false);
+                    __instance.SelectAndDrawStringOptionItem(Loc.LS("TEAM COLORS"), position, 1, Menus.GetMMSTeamColorDefault(), "DISPLAY TEAM COLORS IN DEFAULT ORANGE/BLUE OR CUSTOM (NOT APPLICABLE IN CTF GAMES)", 1.5f, false);
                     position.y += 64f;
-                    __instance.SelectAndDrawStringOptionItem(Loc.LS("MY TEAM"), position, 2, Menus.GetMMSTeamColorSelf(), "", 1.5f, Menus.mms_team_color_default);
+                    __instance.SelectAndDrawStringOptionItem(Loc.LS("MY TEAM"), position, 2, Menus.GetMMSTeamColorSelf(), "", 1.5f, Menus.mms_team_color_default_menu);
                     position.y += 64f;
-                    __instance.SelectAndDrawStringOptionItem(Loc.LS("ENEMY TEAM"), position, 3, Menus.GetMMSTeamColorEnemy(), "", 1.5f, Menus.mms_team_color_default);
+                    __instance.SelectAndDrawStringOptionItem(Loc.LS("ENEMY TEAM"), position, 3, Menus.GetMMSTeamColorEnemy(), "", 1.5f, Menus.mms_team_color_default_menu);
                     position.y += 64f;
                     __instance.SelectAndDrawStringOptionItem(Loc.LS("SHOW TEAM HEALTH"), position, 4, Menus.mms_team_health ? "ON" : "OFF", "SETS WHETHER THE HEALTH OF TEAMMATES SHOULD GET DISPLAYED", 1.5f, false);
                     position.y += 64;
@@ -1069,7 +1094,7 @@ namespace GameMod {
                                         MenuManager.PlayCycleSound(1f, (float)UIManager.m_select_dir);
                                         break;
                                     case 1:
-                                        Menus.mms_team_color_default = !Menus.mms_team_color_default;
+                                        Menus.mms_team_color_default_menu = !Menus.mms_team_color_default_menu;
                                         MenuManager.PlaySelectSound(1f);
                                         MPTeams.UpdateClientColors();
                                         break;
@@ -2241,10 +2266,18 @@ namespace GameMod {
             position.y += 48f;
         }
 
+        static void DrawOverdriveTurnBoost(UIElement uie, ref Vector2 position)
+        {
+            position.y += 62f;
+            uie.SelectAndDrawStringOptionItem(Loc.LS("OVERDRIVE ROTATION BOOST"), position, 6, Menus.GetMMSODTurning(), "BOOSTS ROTATION WHILE OVERDRIVE IS ACTIVE");
+        }
+
         static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> codes)
         {
             int control_remap_page2_count = 0;
             int state = 0;
+            bool foundMouse = false;
+
             foreach (var code in codes)
             {
                 if (code.opcode == OpCodes.Ldsfld && code.operand == AccessTools.Field(typeof(MenuManager), "control_remap_page2"))
@@ -2269,7 +2302,21 @@ namespace GameMod {
                     }
                 }
 
+                if (code.opcode == OpCodes.Ldstr && (string)code.operand == "USE MOUSE")
+                {
+                    foundMouse = true;
+                }
+
                 yield return code;
+
+                if (foundMouse && code.opcode == OpCodes.Call && code.operand == AccessTools.Method(typeof(UIElement), "SelectAndDrawStringOptionItem"))
+                {
+                    foundMouse = false;
+                    yield return new CodeInstruction(OpCodes.Ldarg_0);
+                    yield return new CodeInstruction(OpCodes.Ldloca_S, 0);
+                    yield return new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(Menus_UIElement_DrawControlsMenu), "DrawOverdriveTurnBoost"));
+
+                }
             }
         }
     }
@@ -2349,6 +2396,22 @@ namespace GameMod {
             Controls.ResetControlJoy(_idx, _slot);
         }
 
+        public static void ProcessAdditional()
+        {
+            switch (MenuManager.m_menu_micro_state)
+            {
+                case 0:
+                    switch (UIManager.m_menu_selection)
+                    {
+                        case 6:
+                            MPShips.ODTurnUnrestricted = !MPShips.ODTurnUnrestricted;
+                            MenuManager.PlayCycleSound(1f, UIManager.m_select_dir);
+                            break;
+                    }
+                    break;
+            }
+        }
+
         static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> codes)
         {
             foreach (var code in codes)
@@ -2377,6 +2440,11 @@ namespace GameMod {
                     code.operand = AccessTools.Method(typeof(Menus_MenuManager_ControlsOptionsUpdate), "ResetControlJoy");
 
                 yield return code;
+
+                if (code.opcode == OpCodes.Call && code.operand == AccessTools.Method(typeof(MenuManager), "MaybeReverseOption"))
+                {
+                    yield return new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(Menus_MenuManager_ControlsOptionsUpdate), "ProcessAdditional"));
+                }
             }
         }
     }

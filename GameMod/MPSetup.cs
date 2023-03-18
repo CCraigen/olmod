@@ -258,7 +258,7 @@ namespace GameMod {
                 Menus.mms_damageeffect_alpha_mult = ModPrefs.GetInt("MP_PM_DAMAGEEFFECT_ALPHA_MULT", Menus.mms_damageeffect_alpha_mult);
                 Menus.mms_damageeffect_drunk_blur_mult = ModPrefs.GetInt("MP_PM_DAMAGEEFFECT_DRUNK_BLUR_MULT", Menus.mms_damageeffect_drunk_blur_mult);
                 Menus.mms_match_time_limit = ModPrefs.GetInt("MP_PM_MATCH_TIME_LIMIT", Menus.mms_match_time_limit);
-                Menus.mms_team_color_default = ModPrefs.GetBool("MP_PM_TEAM_COLOR_DEFAULT", Menus.mms_team_color_default);
+                Menus.mms_team_color_default = ModPrefs.GetBool("MP_PM_TEAM_COLOR_DEFAULT", Menus.mms_team_color_default_menu);
                 Menus.mms_team_color_self = ModPrefs.GetInt("MP_PM_TEAM_COLOR_SELF", Menus.mms_team_color_self);
                 Menus.mms_team_color_enemy = ModPrefs.GetInt("MP_PM_TEAM_COLOR_ENEMY", Menus.mms_team_color_enemy);
                 Menus.mms_team_health = ModPrefs.GetBool("MP_PM_TEAM_HEALTH", Menus.mms_team_health);
@@ -294,7 +294,7 @@ namespace GameMod {
                 MPAudioTaunts.AClient.display_audio_spectrum = ModPrefs.GetBool("MP_AUDIOTAUNT_SHOW_FREQUENCYBAND", true);
 
                 FramerateLimiter.target_framerate = ModPrefs.GetInt("TARGET_FRAMERATE", 0);
-
+                MPShips.ODTurnUnrestricted = ModPrefs.GetBool("OD_TURN_UNRESTRICTED", MPShips.ODTurnUnrestricted);
             }
             else // for compatibility with old olmod, no need to add new settings
             {
@@ -351,7 +351,8 @@ namespace GameMod {
             ModPrefs.SetInt("MP_PM_DAMAGEEFFECT_ALPHA_MULT", Menus.mms_damageeffect_alpha_mult);
             ModPrefs.SetInt("MP_PM_DAMAGEEFFECT_DRUNK_BLUR_MULT", Menus.mms_damageeffect_drunk_blur_mult);
             ModPrefs.SetInt("MP_PM_MATCH_TIME_LIMIT", Menus.mms_match_time_limit);
-            ModPrefs.SetBool("MP_PM_TEAM_COLOR_DEFAULT", Menus.mms_team_color_default);
+            //ModPrefs.SetBool("MP_PM_TEAM_COLOR_DEFAULT", Menus.mms_team_color_default);
+            ModPrefs.SetBool("MP_PM_TEAM_COLOR_DEFAULT", Menus.mms_team_color_default_menu); // write the actual field to avoid the CTF color bypasss
             ModPrefs.SetInt("MP_PM_TEAM_COLOR_SELF", Menus.mms_team_color_self);
             ModPrefs.SetInt("MP_PM_TEAM_COLOR_ENEMY", Menus.mms_team_color_enemy);
             ModPrefs.SetBool("MP_PM_TEAM_HEALTH", Menus.mms_team_health);
@@ -387,6 +388,7 @@ namespace GameMod {
                 ModPrefs.SetInt("MP_AUDIOTAUNT_KEYBIND_" + i.ToString(), MPAudioTaunts.AClient.keybinds[i]);}
             ModPrefs.SetBool("MP_AUDIOTAUNT_SHOW_FREQUENCYBAND", MPAudioTaunts.AClient.display_audio_spectrum);
             ModPrefs.SetInt("TARGET_FRAMERATE", FramerateLimiter.target_framerate);
+            ModPrefs.SetBool("OD_TURN_UNRESTRICTED", MPShips.ODTurnUnrestricted);
 
             ModPrefs.Flush(filename + "mod");
         }
