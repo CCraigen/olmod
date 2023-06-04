@@ -261,7 +261,7 @@ namespace GameMod {
                 if (code.opcode == OpCodes.Ldc_I4_8)
                     yield return new CodeInstruction(OpCodes.Ldc_I4, 16);
                 else if (code.opcode == OpCodes.Ldc_I4_S && (sbyte)code.operand == 10)
-                    yield return new CodeInstruction(OpCodes.Ldc_I4, 160);
+                    yield return new CodeInstruction(OpCodes.Ldc_I4, 32); // 160 was the original expanded value here but new assist code doesn't need that many
                 else
                     yield return code;
             }
@@ -287,7 +287,7 @@ namespace GameMod {
                 if (code.opcode == OpCodes.Ldc_I4_7)
                     yield return new CodeInstruction(OpCodes.Ldc_I4, 16 - 1);
                 else if (code.opcode == OpCodes.Ldc_I4_S && (sbyte)code.operand == 10)
-                    yield return new CodeInstruction(OpCodes.Ldc_I4, 160);
+                    yield return new CodeInstruction(OpCodes.Ldc_I4, 32); // 160 was the original expanded value here but new assist code doesn't need that many
                 else
                     yield return code;
         }
@@ -304,7 +304,7 @@ namespace GameMod {
             {
                 if (code.opcode == OpCodes.Ldc_I4_S && (sbyte)code.operand == 10 &&
                     ++Ldc_I4_s_10_count == 2)
-                    yield return new CodeInstruction(OpCodes.Ldc_I4, 160);
+                    yield return new CodeInstruction(OpCodes.Ldc_I4, 32); // 160 was the original expanded value here but new assist code doesn't need that many
                 else
                     yield return code;
             }
@@ -319,7 +319,7 @@ namespace GameMod {
             foreach (var code in instructions)
             {
                 if (code.opcode == OpCodes.Ldc_I4_S && (sbyte)code.operand == 10)
-                    yield return new CodeInstruction(OpCodes.Ldc_I4, 160);
+                    yield return new CodeInstruction(OpCodes.Ldc_I4, 32); // 160 was the original expanded value here but new assist code doesn't need that many
                 else
                     yield return code;
             }
@@ -334,7 +334,7 @@ namespace GameMod {
             foreach (var code in instructions)
             {
                 if (code.opcode == OpCodes.Ldc_I4_S && (sbyte)code.operand == 10)
-                    yield return new CodeInstruction(OpCodes.Ldc_I4, 160);
+                    yield return new CodeInstruction(OpCodes.Ldc_I4, 32); // 160 was the original expanded value here but new assist code doesn't need that many
                 else
                     yield return code;
             }

@@ -254,6 +254,25 @@ namespace GameMod {
             TrackerPostStats(obj);
 
             CleanUp();
+
+
+            // *******************************************
+            // CCF TEMP INCLUSION FROM THE ASSIST CODE TESTING SINCE THIS IS A CONVENIENT PLACE IN THE GAME STATE TO DO IT
+            // *******************************************
+            Debug.Log("CCF ===============================");
+            Debug.Log("CCF ASSISTS TESTING RECORD");
+            Debug.Log(" ");
+            foreach (string s in AssistTesting.Assists40.Keys)
+            {
+                Debug.Log("Player: " + s);
+                Debug.Log("    " + AssistTesting.Assists40[s] + " assists -- Threshold 40");
+                Debug.Log("    " + AssistTesting.Assists40d[s] + " assists -- Threshold 40 with decay");
+                Debug.Log("    " + AssistTesting.Assists50[s] + " assists -- Threshold 50");
+                Debug.Log("    " + AssistTesting.Assists50d[s] + " assists -- Threshold 50 with decay");
+                Debug.Log(" ");
+            }
+            Debug.Log("CCF END ASSISTS TESTING RECORD");
+            Debug.Log("CCF ===============================");
         }
 
         public static void SetAttacker(string name, MpTeam team)

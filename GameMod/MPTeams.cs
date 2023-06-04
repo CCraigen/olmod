@@ -1434,6 +1434,14 @@ namespace GameMod
         }
     }
 
+
+    // **************************************
+    // **************************************
+    // CREEPER COLOURS
+    // **************************************
+    // **************************************
+
+
     // Team-colored creepers in team games
     [HarmonyPatch(typeof(Projectile), "Fire")]
     class MPTeams_Projectile_Fire
@@ -1567,7 +1575,7 @@ namespace GameMod
                         {
                             foreach (var mat in rend.materials)
                             {
-                                
+
                                 if (mat.name == "enemy_creeper1 (Instance)")
                                 {
                                     mat.SetFloat("_EdgePower", 5f - 4f * (1f - pulse));
@@ -1613,6 +1621,261 @@ namespace GameMod
                 ProjectileManager.proj_list[i].Clear();
             }
             UpdateDynamicManager.m_proj_count = 0;
+
+            // test code for Assists here as well
+            AssistTesting.Assists40.Clear();
+            AssistTesting.Assists40d.Clear();
+            AssistTesting.Assists50.Clear();
+            AssistTesting.Assists50d.Clear();
+        }
+    }
+
+
+    // **************************************
+    // **************************************
+    // ASSIST REWORK
+    // **************************************
+    // **************************************
+
+    // test code
+    public static class AssistTesting
+    {
+        // LOOK UP ^ ^ ^
+        public static float[,] decaytest = new float[32, 32];
+
+        public static Dictionary<string, int> Assists40 = new Dictionary<string, int>();
+        public static Dictionary<string, int> Assists40d = new Dictionary<string, int>();
+        public static Dictionary<string, int> Assists50 = new Dictionary<string, int>();
+        public static Dictionary<string, int> Assists50d = new Dictionary<string, int>();
+    }
+
+    [HarmonyPatch(typeof(Player), "AddRecentDamage")]
+    class MPTeams_Player_AddRecentDamage
+    {
+        static bool Prefix(Player __instance, DamageInfo di, float dmg_amt)
+        {
+            if (di.owner == null)
+            {
+                return false;
+            }
+            Player p = di.owner.GetComponent<Player>();
+            int connId = p.connectionToClient.connectionId;
+
+            if (p == null)
+            {
+                return false;
+            }
+
+            __instance.m_player_damage[connId].player = p;
+            __instance.m_player_damage[connId].amt += dmg_amt;
+            __instance.m_player_damage[connId].timer = 5f; // Timer is still used in the case of an assisted suicide and for calculating the damage decay (if that's enabled)
+            __instance.m_player_damage[connId].mp_team = p.m_mp_team;
+            __instance.m_player_damage[connId].mp_name = p.m_mp_name;
+            __instance.m_player_damage[connId].client_id = connId;
+            __instance.m_player_damage[connId].dmg_type = GetKillTypeFromDamageInfo(di);
+
+            // test code
+            AssistTesting.decaytest[__instance.connectionToClient.connectionId, connId] += dmg_amt;
+
+            return false;
+        }
+
+        static int GetKillTypeFromDamageInfo(DamageInfo di)
+        {
+            switch (di.weapon)
+            {
+                case ProjPrefab.proj_impulse:
+                    return 0;
+                case ProjPrefab.proj_vortex:
+                    return 1;
+                case ProjPrefab.proj_reflex:
+                    return 2;
+                case ProjPrefab.proj_shotgun:
+                    return 3;
+                case ProjPrefab.proj_driller:
+                    return 4;
+                case ProjPrefab.proj_flak_cannon:
+                    return 5;
+                case ProjPrefab.proj_thunderbolt:
+                    return 6;
+                case ProjPrefab.proj_beam:
+                    return 7;
+                case ProjPrefab.missile_falcon:
+                    return 8;
+                case ProjPrefab.missile_pod:
+                    return 9;
+                case ProjPrefab.missile_hunter:
+                    return 10;
+                case ProjPrefab.missile_creeper:
+                    return 11;
+                case ProjPrefab.missile_smart:
+                case ProjPrefab.missile_smart_mini:
+                    return 12;
+                case ProjPrefab.missile_devastator:
+                case ProjPrefab.missile_devastator_mini:
+                    return 13;
+                case ProjPrefab.missile_timebomb:
+                    return 14;
+                case ProjPrefab.missile_vortex:
+                    return 15;
+                case ProjPrefab.proj_melee:
+                    return 16;
+                default:
+                    return -1;
+            }
+        }
+    }
+
+
+    // the main guts of the assist algorithm
+    [HarmonyPatch(typeof(Player), "FindAssistPlayer")]
+    class MPTeams_Player_FindAssistPlayer
+    {
+        const float dmg_threshold = 40f; // how much damage a player has to do for it to register as an assist -- testing value was initially 50, stock 30
+
+        public static bool Prefix(Player __instance, int killer_id, bool other_team, ref PlayerDamageRecord pdr)
+        {
+            pdr = default(PlayerDamageRecord);
+            pdr.client_id = -1;
+            float max_dmg = -1f;
+
+            foreach (PlayerDamageRecord p in __instance.m_player_damage)
+            {
+
+                if (!(__instance.connectionToClient.connectionId == killer_id && p.timer <= 0f) && p.client_id != killer_id && __instance.connectionToClient.connectionId != p.client_id && !(other_team && __instance.m_mp_team == p.mp_team) && p.amt >= dmg_threshold && p.amt > max_dmg)
+                {
+                    pdr = p;
+                    max_dmg = p.amt;
+
+                    // test code
+                    Debug.Log("CCF ===============================");
+                    Debug.Log("CCF ASSIST - " + pdr.mp_name + " recorded " + pdr.amt + " damage on " + __instance.m_mp_name + " (" + AssistTesting.decaytest[__instance.connectionToClient.connectionId, pdr.client_id] + " damage with decay included)");
+                    Debug.Log("CCF 40 Threshold, no decay: " + ((pdr.amt > 40) ? "ASSIST" : "no assist"));
+                    Debug.Log("CCF 40 Threshold, w/ decay: " + ((AssistTesting.decaytest[__instance.connectionToClient.connectionId, pdr.client_id] > 40) ? "ASSIST" : "no assist"));
+                    Debug.Log("CCF 50 Threshold, no decay: " + ((pdr.amt > 50) ? "ASSIST" : "no assist"));
+                    Debug.Log("CCF 50 Threshold, w/ decay: " + ((AssistTesting.decaytest[__instance.connectionToClient.connectionId, pdr.client_id] > 50) ? "ASSIST" : "no assist"));
+                    Debug.Log("CCF ===============================");
+
+                    int A40 = 0;
+                    int A40d = 0;
+                    int A50 = 0;
+                    int A50d = 0;
+
+                    AssistTesting.Assists40.TryGetValue(pdr.mp_name, out A40);
+                    AssistTesting.Assists40d.TryGetValue(pdr.mp_name, out A40d);
+                    AssistTesting.Assists50.TryGetValue(pdr.mp_name, out A50);
+                    AssistTesting.Assists50d.TryGetValue(pdr.mp_name, out A50d);
+
+                    AssistTesting.Assists40[pdr.mp_name] = A40 + ((pdr.amt > 40) ? 1 : 0);
+                    AssistTesting.Assists40d[pdr.mp_name] = A40d + ((AssistTesting.decaytest[__instance.connectionToClient.connectionId, pdr.client_id] > 40) ? 1 : 0);
+                    AssistTesting.Assists50[pdr.mp_name] = A50 + ((pdr.amt > 50) ? 1 : 0);
+                    AssistTesting.Assists50d[pdr.mp_name] = A50d + ((AssistTesting.decaytest[__instance.connectionToClient.connectionId, pdr.client_id] > 50) ? 1 : 0);
+                }
+            }
+
+            return false;
+        }
+    }
+
+
+    // resets the assist damage records on respawn
+    [HarmonyPatch(typeof(NetworkSpawnPlayer), "Respawn")]
+    class MPTeams_NetworkSpawnPlayer_Respawn
+    {
+        static void Postfix(PlayerShip player_ship)
+        {
+            for (int i = 0; i < 32; i++)
+            {
+                player_ship.c_player.m_player_damage[i] = default(PlayerDamageRecord);
+
+                // test code
+                AssistTesting.decaytest[player_ship.connectionToClient.connectionId, i] = 0f;
+            }
+        }
+    }
+
+
+    // if a new client connects, nuke all the damage records that previously used that lobby_id
+    [HarmonyPatch(typeof(PlayerShip), "Start")]
+    class MPTeams_PlayerShip_Start
+    {
+        static void Postfix(PlayerShip __instance)
+        {
+            if (GameplayManager.IsDedicatedServer())
+            {
+                foreach (Player p in Overload.NetworkManager.m_Players)
+                {
+                    p.m_player_damage[__instance.connectionToClient.connectionId] = default(PlayerDamageRecord);
+
+                    // test code
+                    AssistTesting.decaytest[p.connectionToClient.connectionId, __instance.connectionToClient.connectionId] = 0f;
+                }
+            }
+        }
+    }
+
+
+    // when a ship picks up armor, subtract that amount from all the assist records on that player (letting them essentially "undo" the assist if they pick up enough armor)
+    [HarmonyPatch(typeof(Player), "AddArmor")]
+    class MPTeams_Player_AddArmor
+    {
+        static void Postfix(ref bool __result, Player __instance, float armor)
+        {
+            if (__result)
+            {
+                for (int i = 0; i < 32; i++)
+                {
+                    __instance.m_player_damage[i].amt -= armor;
+
+                    if (__instance.m_player_damage[i].amt < 0f)
+                    {
+                        __instance.m_player_damage[i].amt = 0f;
+                    }
+
+                    // test code
+                    AssistTesting.decaytest[__instance.connectionToClient.connectionId, i] -= armor;
+                    if (AssistTesting.decaytest[__instance.connectionToClient.connectionId, i] < 0f)
+                    {
+                        AssistTesting.decaytest[__instance.connectionToClient.connectionId, i] = 0f;
+                    }
+                }
+            }
+        }
+    }
+
+
+    // begin "decaying" recorded damage towards the assist after 5 seconds (~3 dmg per second decay currently)
+    [HarmonyPatch(typeof(Player), "UpdateNetworkPlayer")]
+    class MPTeams_Player_UpdateNetworkPlayer
+    {
+        static void Postfix(ref PlayerDamageRecord[] ___m_player_damage, Player __instance)
+        {
+            for (int i = 0; i < 32; i++)
+            {
+                if (___m_player_damage[i].timer <= 0f)
+                {
+                    /*
+                    if (___m_player_damage[i].amt > 0f)
+                    {
+                        ___m_player_damage[i].amt -= RUtility.FRAMETIME_GAME * 3;
+                    }
+                    else
+                    {
+                        ___m_player_damage[i].amt = 0f;
+                    }
+                    */
+
+                    // test code
+                    if (AssistTesting.decaytest[__instance.connectionToClient.connectionId, i] > 0f)
+                    {
+                        AssistTesting.decaytest[__instance.connectionToClient.connectionId, i] -= RUtility.FRAMETIME_GAME * 3;
+                    }
+                    else
+                    {
+                        AssistTesting.decaytest[__instance.connectionToClient.connectionId, i] = 0f;
+                    }
+                }
+            }
         }
     }
 }
