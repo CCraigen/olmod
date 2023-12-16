@@ -4,8 +4,13 @@ using UnityEngine;
 
 namespace GameMod
 {
-    class MPSkipClientResimulation
+    public static class MPSkipClientResimulation
     {
+        public static float err_distsqr = 0f;
+        public static float err_angle = 0f;
+
+        public static int tick_diff = 0;
+
         // Client.ReconcileServerPlayerState is called at every fixed physics tick
         // it will replay the local simulation from the last packet we've seen
         // from the server.
@@ -43,18 +48,26 @@ namespace GameMod
                     Client.m_PendingPlayerStateMessages.Dequeue();
                 }
                 PlayerStateToClientMessage msg = Client.m_PendingPlayerStateMessages.Peek();
-                if (msg.m_tick < Client.m_tick)
+                tick_diff = Client.m_tick - msg.m_tick;
+                //if (msg.m_tick < Client.m_tick)
+                if (tick_diff > 0)
                 {
                     PlayerState s = ___m_player_state_history[msg.m_tick & 1023];
                     if (s != null) {
-                        float err_distsqr = (msg.m_player_pos - s.m_pos).sqrMagnitude;
-                        float err_angle = Mathf.Abs(Quaternion.Angle(msg.m_player_rot, s.m_rot));
+                        //float err_distsqr = (msg.m_player_pos - s.m_pos).sqrMagnitude;
+                        //float err_angle = Mathf.Abs(Quaternion.Angle(msg.m_player_rot, s.m_rot));
+                        //bool skip = (err_distsqr < 0.0004f) && (err_angle < 0.5f);
+                        err_distsqr = (msg.m_player_pos - s.m_pos).sqrMagnitude;
+                        err_angle = Mathf.Abs(Quaternion.Angle(msg.m_player_rot, s.m_rot));
                         bool skip = (err_distsqr < 0.0004f) && (err_angle < 0.5f);
                         if (skip) {
                             // we are skipping the resimulation, consume the message right here
                             if (Client.m_last_acknowledged_tick < msg.m_tick) {
                                 Client.m_last_acknowledged_tick = msg.m_tick;
                             }
+
+                            err_distsqr = 0f;
+                            err_angle = 0f;
 
                             player.c_player_ship.m_boost_heat = msg.m_boost_heat;
                             player.c_player_ship.m_boost_overheat_timer = msg.m_boost_overheat_timer;

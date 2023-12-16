@@ -105,6 +105,7 @@
     <Compile Include="AmbientUnload.cs" />
     <Compile Include="AxisCountFix.cs" />
     <Compile Include="Assets.cs" />
+    <Compile Include="DiagGraph.cs" />
     <Compile Include="MPWeapons.cs" />
     <Compile Include="MPMatchInfo.cs" />
     <Compile Include="FramerateLimiter.cs" />

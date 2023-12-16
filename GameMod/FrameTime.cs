@@ -21,11 +21,11 @@ namespace GameMod
 
     // fix the FPS calculation
     [HarmonyPatch(typeof(UIElement), "DrawHUD")]
-    class FixFPSCalculation
+    public class FixFPSCalculation
     {
         private static uint lastMeasurementCount = 0;
         private static float lastMeasurementTime = 0.0f;
-        private static float currentFrameTime = 0.1f;
+        public static float currentFrameTime = 0.1f;
         private static float currentDuration = 0.1f;
         private static float currentFPS = 0.0f;
         private static MethodInfo our_Method = AccessTools.Method(typeof(FixFPSCalculation), "CalculateFPS");
