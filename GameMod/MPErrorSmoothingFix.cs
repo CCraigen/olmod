@@ -6,10 +6,10 @@ namespace GameMod
 {
     public class MPErrorSmoothingFix
     {
-        private static Vector3 lastPosition = new Vector3();
-        private static Quaternion lastRotation = new Quaternion();
-        private static Vector3 currPosition = new Vector3();
-        private static Quaternion currRotation = new Quaternion();
+        public static Vector3 lastPosition = new Vector3();
+        public static Quaternion lastRotation = new Quaternion();
+        public static Vector3 currPosition = new Vector3();
+        public static Quaternion currRotation = new Quaternion();
         private static bool doManualInterpolation = false;
         private static bool targetTransformOverridden = false;
         private static Transform targetTransformNode = null;

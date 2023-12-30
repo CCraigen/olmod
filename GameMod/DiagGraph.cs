@@ -60,29 +60,83 @@ namespace GameMod
         [HarmonyPatch(typeof(UIElement), "DrawHUD")]
         internal class GraphManager_GameManager_Starttss
         {
+            public static int graphstate = 0;
+
             private static void Postfix(UIElement __instance)
             {
                 GameManager.m_display_fps = true;
-                foreach (Graph.DecayStructure cur in Graph.data_graphs)
+                if (GameManager.m_player_ship.m_dying || GameManager.m_player_ship.m_dead)
                 {
-                    if (cur.name == "Frametime")
+                    graphstate = 0;
+                }
+                else
+                {
+                    graphstate++;
+                }
+
+                if (graphstate > 5) // should leave a few frames immediately following a respawn
+                {
+                    foreach (Graph.DecayStructure cur in Graph.data_graphs)
                     {
-                        cur.AddElement(new float[] { FixFPSCalculation.currentFrameTime });
-                        //uConsole.Log("Adding element: " + UIElement.average_fps+"   size:"+cur.size+"  limit:"+cur.element_limit);
-                    }
-                    if (cur.name == "PosCorrect")
-                    {
-                        cur.AddElement(new float[] { MPSkipClientResimulation.err_distsqr });
-                    }
-                    if (cur.name == "RotCorrect")
-                    {
-                        cur.AddElement(new float[] { MPSkipClientResimulation.err_angle });
-                    }
-                    if (cur.name == "TickDiff")
-                    {
-                        cur.AddElement(new float[] { MPSkipClientResimulation.tick_diff });
+                        if (cur.name == "Frametime")
+                        {
+                            cur.AddElement(new float[] { FixFPSCalculation.currentFrameTime });
+                            //uConsole.Log("Adding element: " + UIElement.average_fps+"   size:"+cur.size+"  limit:"+cur.element_limit);
+                        }
+                        if (MPSkipClientResimulation.data_available)
+                        {
+                            if (cur.name == "PosCorrect")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.err_distsqr });
+                            }
+                            if (cur.name == "RotCorrect")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.err_angle });
+                            }
+                            if (cur.name == "TickDiff")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.tick_diff });
+                            }
+                            /*if (cur.name == "TickDiff")
+                            {
+                                cur.AddElement(new float[] { Mathf.Abs(Client.m_tick - GameManager.m_local_player.m_last_ackknowledged_server_tick) });
+                            }*/
+                            if (cur.name == "PosInterp")
+                            {
+                                cur.AddElement(new float[] { Mathf.Abs(Vector3.Distance(MPErrorSmoothingFix.currPosition, MPErrorSmoothingFix.lastPosition)) });
+                            }
+                            if (cur.name == "RotInterp")
+                            {
+                                cur.AddElement(new float[] { Mathf.Abs(Quaternion.Angle(MPErrorSmoothingFix.currRotation, MPErrorSmoothingFix.lastRotation)) });
+                            }
+                            if (cur.name == "ResimDepth")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.resim_depth });
+                            }
+                            if (cur.name == "UpdInterval")
+                            {
+                                cur.AddElement(new float[] { Time.fixedUnscaledDeltaTime });
+                            }
+                            if (cur.name == "VelDiff")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.vdiff });
+                            }
+                            if (cur.name == "AngDiff")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.avdiff });
+                            }
+                            if (cur.name == "MoveVec")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.movevec });
+                            }
+                            if (cur.name == "TurnVec")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.turnvec });
+                            }
+                        }
                     }
                 }
+                MPSkipClientResimulation.data_available = false;
 
                 foreach (Graph gr in graphs)
                 {
@@ -137,16 +191,49 @@ namespace GameMod
                 Graph g2 = new Graph(new Vector2(-80f, 345f), 125, 45, "PosCorrect");
                 Graph g3 = new Graph(new Vector2(80f, 345f), 125, 45, "RotCorrect");
                 Graph g4 = new Graph(new Vector2(445f, 333f), 100, 45, "TickDiff");
+                Graph g5 = new Graph(new Vector2(210f, 250f), 100, 45, "PosInterp");
+                Graph g6 = new Graph(new Vector2(330f, 250f), 100, 45, "RotInterp");
+                Graph g7 = new Graph(new Vector2(210f, 340f), 100, 45, "ResimDepth");
+                //Graph g8 = new Graph(new Vector2(330f, 340f), 100, 45, "UpdInterval");
+                Graph g8 = new Graph(new Vector2(-445f, 333f), 100, 45, "UpdInterval");
+                Graph g9 = new Graph(new Vector2(210f, 250f), 100, 45, "VelDiff");
+                Graph g10 = new Graph(new Vector2(330f, 250f), 100, 45, "AngDiff");
+                Graph g11 = new Graph(new Vector2(210f, 250f), 100, 45, "MoveVec");
+                Graph g12 = new Graph(new Vector2(330f, 250f), 100, 45, "TurnVec");
 
                 g1.data_show[0] = true;
                 g2.data_show[1] = true;
                 g3.data_show[2] = true;
                 g4.data_show[3] = true;
+                g5.data_show[4] = true;
+                g6.data_show[5] = true;
+                g7.data_show[6] = true;
+                g8.data_show[7] = true;
+                g9.data_show[8] = true;
+                g10.data_show[9] = true;
+                g11.data_show[10] = true;
+                g12.data_show[11] = true;
 
                 graphs.Add(g1);
                 graphs.Add(g2);
                 graphs.Add(g3);
                 graphs.Add(g4);
+                graphs.Add(g5);
+                graphs.Add(g6);
+                graphs.Add(g7);
+                graphs.Add(g8);
+                graphs.Add(g9);
+                graphs.Add(g10);
+                graphs.Add(g11);
+                graphs.Add(g12);
+
+                g1.visible = false; // # of active graphs getting too much
+                g5.visible = false; // interesting, but not super useful
+                g6.visible = false; // interesting, but not super useful
+                //g9.visible = false;
+                //g10.visible = false;
+                g11.visible = false;
+                g12.visible = false;
 
                 g = g1;
             }
@@ -359,6 +446,46 @@ namespace GameMod
             data_graphs[data_graphs.Count - 1].draw_x = -1;
             data_graphs[data_graphs.Count - 1].draw_y = 0;
 
+            data_graphs.Add(new DecayStructure(1000));
+            data_graphs[data_graphs.Count - 1].name = "PosInterp";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+
+            data_graphs.Add(new DecayStructure(1000));
+            data_graphs[data_graphs.Count - 1].name = "RotInterp";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+
+            data_graphs.Add(new DecayStructure(1000));
+            data_graphs[data_graphs.Count - 1].name = "ResimDepth";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+
+            data_graphs.Add(new DecayStructure(1000));
+            data_graphs[data_graphs.Count - 1].name = "UpdInterval";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+
+            data_graphs.Add(new DecayStructure(1000));
+            data_graphs[data_graphs.Count - 1].name = "VelDiff";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+
+            data_graphs.Add(new DecayStructure(1000));
+            data_graphs[data_graphs.Count - 1].name = "AngDiff";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+
+            data_graphs.Add(new DecayStructure(1000));
+            data_graphs[data_graphs.Count - 1].name = "MoveVec";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+
+            data_graphs.Add(new DecayStructure(1000));
+            data_graphs[data_graphs.Count - 1].name = "TurnVec";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+
             uConsole.Log("GRAPHING - " + data_graphs.Count + " DataGraphs initialized");
         }
 
@@ -404,6 +531,9 @@ namespace GameMod
             public float findMaximumForIndex(int index)
             {
                 Element curr = first;
+                if (curr == null)
+                    return 0;
+
                 float max = curr.getFloatAtIndex(index);
                 while (curr.next != null)
                 {
