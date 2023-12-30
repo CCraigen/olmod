@@ -64,7 +64,7 @@ namespace GameMod
                     Client.m_PendingPlayerStateMessages.Dequeue();
                 }
                 PlayerStateToClientMessage msg = Client.m_PendingPlayerStateMessages.Peek();
-
+              
                 tick_diff = Client.m_tick - msg.m_tick;
                 //if (msg.m_tick < Client.m_tick)
                 if (tick_diff > 0)

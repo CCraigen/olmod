@@ -229,7 +229,9 @@ namespace GameMod {
     {
         public static bool MaybeInLobby()
         {
-            return MPJoinInProgress.NetworkMatchEnabled || NetworkMatch.InLobby();
+            MatchState state = NetworkMatch.GetMatchState();
+            Debug.Log("CCF Match state is " + state.ToString() + ", client is allowed: " + ((MPJoinInProgress.NetworkMatchEnabled && state == MatchState.PLAYING) || state == MatchState.LOBBY));
+            return (MPJoinInProgress.NetworkMatchEnabled && state == MatchState.PLAYING) || state == MatchState.LOBBY; // only allow connections if the lobby is active or once the round is fully running if JIP is on
         }
 
         private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> codes)
@@ -454,6 +456,24 @@ namespace GameMod {
                     }
                 }
                 MPJoinInProgress.SetReady(newPlayer, false, true); // special case: do not disable the player completely, as this would prevent this player to be sent to new clients joining before we finally switch to ready
+            }
+
+            // CCF SEND THE THINGS
+            if (MPTweaks.ClientHasTweak(connectionId, MPShips.MULTISHIP_VERSION))
+            {
+                foreach (var player in Overload.NetworkManager.m_Players.Where(x => (x.connectionToClient.connectionId > 0 && x.connectionToClient.connectionId != connectionId)))
+                {
+                    //Debug.Log("CCF JIP SEND STEP --------------------");
+
+                    var msg = new MPShips.ShipDataToClientMessage
+                    {
+                        netId = player.c_player_ship.netId,
+                        lobbyId = player.connectionToClient.connectionId,
+                        selected_idx = MPShips.LobbyShips[player.connectionToClient.connectionId] // error checking for missing stuff needs to happen here
+                    };
+                    Debug.Log("CCF JIP sending message to client " + connectionId + " for player " + msg.netId + " selected_idx " + msg.selected_idx);
+                    NetworkServer.SendToClient(connectionId, MessageTypes.MsgShipDataToClient, msg);
+                }
             }
 
             pregameWait = SendPreGame(connectionId, pregameWait);

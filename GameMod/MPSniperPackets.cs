@@ -13,7 +13,7 @@ namespace GameMod
     /// <summary>
     /// Revamps multiplayer networking in olmod to better trust the client when it comes to things like weapon firing position/rotation, selected primary/secondary, and resource amounts (except armor, that is still handled server-side).  The goal is to provide a more consistent game experience for the pilot when it comes to what they see firing on their screen and what actually happens with their fire on the server.  This also fixes several super annoying synchronization bugs that have been brought up by the community.
     /// </summary>
-    internal class MPSniperPackets
+    public class MPSniperPackets
     {
         public const int NET_VERSION_SNIPER_PACKETS = 1;
 
@@ -66,7 +66,7 @@ namespace GameMod
         /// Replacement function for Server.IsActive() in MaybeFireWeapon and other places that need to deduct from the player's energy pool regardless if the function is called on client or server.
         /// </summary>
         /// <returns></returns>
-        static bool AlwaysUseEnergy()
+        public static bool AlwaysUseEnergy()
         {
             if (!enabled) return Server.IsActive();
 
@@ -86,7 +86,7 @@ namespace GameMod
         /// <param name="slot"></param>
         /// <param name="force_id"></param>
         /// <returns></returns>
-        static ParticleElement MaybePlayerFire(Player player, ProjPrefab type, Vector3 pos, Quaternion rot, float strength = 0, WeaponUnlock upgrade_lvl = WeaponUnlock.LEVEL_0, bool no_sound = false, int slot = -1, int force_id = -1)
+        public static ParticleElement MaybePlayerFire(Player player, ProjPrefab type, Vector3 pos, Quaternion rot, float strength = 0, WeaponUnlock upgrade_lvl = WeaponUnlock.LEVEL_0, bool no_sound = false, int slot = -1, int force_id = -1)
         {
             if (!enabled) return ProjectileManager.PlayerFire(player, type, pos, rot, strength, upgrade_lvl, no_sound, slot, force_id);
             if (!GameplayManager.IsMultiplayerActive) return ProjectileManager.PlayerFire(player, type, pos, rot, strength, upgrade_lvl, no_sound, slot, force_id);
@@ -95,7 +95,10 @@ namespace GameMod
             // Set this to false so that creepers and time bombs do not explode unless the server tells us.
             CreeperSyncExplode.m_allow_explosions = false;
 
-            if (player.isLocalPlayer && type == ProjPrefab.missile_devastator)
+            Weapon weapon = MPWeapons.WeaponLookup[(int)type];
+
+            //if (player.isLocalPlayer && type == ProjPrefab.missile_devastator)
+            if (player.isLocalPlayer && weapon != null && weapon.firingMode == FiringMode.DETONATOR && (int)type == (int)weapon.projprefab) // we only want this on the main projectile
             {
                 MPSniperPackets.justFiredDev = true;
             }
@@ -105,7 +108,8 @@ namespace GameMod
                 return null;
             }
 
-            if (player.isLocalPlayer && type != ProjPrefab.missile_devastator_mini && type != ProjPrefab.missile_smart_mini)
+            //if (player.isLocalPlayer && type != ProjPrefab.missile_devastator_mini && type != ProjPrefab.missile_smart_mini)
+            if (player.isLocalPlayer && weapon != null && (int)type == (int)weapon.projprefab) // if it indexed to this but it's not projprefab, it's the subprojectile
             {
                 Client.GetClient().Send(MessageTypes.MsgSniperPacket, new SniperPacketMessage
                 {
@@ -123,10 +127,13 @@ namespace GameMod
 
             var result = ProjectileManager.PlayerFire(player, type, pos, rot, strength, upgrade_lvl, no_sound, slot, force_id);
 
-            if (type == ProjPrefab.missile_devastator || type == ProjPrefab.missile_smart || type == ProjPrefab.missile_timebomb || type == ProjPrefab.missile_creeper)
+            //if (type == ProjPrefab.missile_devastator || type == ProjPrefab.missile_smart || type == ProjPrefab.missile_timebomb || type == ProjPrefab.missile_creeper)
+            //if (weapon != null && weapon.GetType() == typeof(SecondaryWeapon) && (((SecondaryWeapon)weapon).subproj != ProjPrefabExt.none || weapon.MineHoming))
+            if (weapon != null && MPCreeperSync.ExplodeSync.Contains(weapon.projprefab))
             {
                 foreach (var proj in ProjectileManager.proj_list[(int)type])
                 {
+                    //Debug.Log("CCF disabling collider on a " + ((ProjPrefabExt)type).ToString() + " on " + (GameplayManager.IsDedicatedServer() ? "server" : "client"));
                     proj.c_go.GetComponent<Collider>().enabled = false;
                 }
             }
@@ -530,6 +537,19 @@ namespace GameMod
                                     MPAutoSelection.swapToMissile((int)missileType);
                                 }
 
+                                //if (player.m_missile_type != MissileType.NUM && MPWeapons.secondaries[(int)player.m_missile_type].WarnSelect && player.m_old_missile_type != player.m_missile_type)
+                                //if (player.m_missile_type != MissileType.NUM && MPWeapons.secondaries[(int)player.m_missile_type].WarnSelect && !MPWeapons.secondaries[(int)oldMissileType].WarnSelect)
+                                Weapon currmissile = MPWeapons.secondaries[(int)player.m_missile_type];
+                                Weapon oldmissile = MPWeapons.secondaries[(int)oldMissileType];
+                                if (currmissile != null && currmissile.WarnSelect && (oldmissile == null || !oldmissile.WarnSelect))
+                                {
+                                    if (MPAutoSelection.zorc)
+                                    {
+                                        SFXCueManager.PlayCue2D(SFXCue.enemy_boss1_alert, 1f, 0f, 0f, false);
+                                        GameplayManager.AlertPopup(string.Format(Loc.LS("{0} SELECTED"), Player.MissileNames[player.m_missile_type]), string.Empty, 5f);
+                                    }
+                                }
+                                /*
                                 if (GameManager.m_local_player.m_missile_type == MissileType.DEVASTATOR && oldMissileType != MissileType.DEVASTATOR)
                                 {
                                     if (MPAutoSelection.zorc)
@@ -538,6 +558,7 @@ namespace GameMod
                                         GameplayManager.AlertPopup(Loc.LS("DEVASTATOR SELECTED"), string.Empty, 5f);
                                     }
                                 }
+                                */
                             }
                         }
                     }
@@ -737,7 +758,7 @@ namespace GameMod
                         refireTime = 0.1f / (player.m_overdrive ? 1.5f : 1f);
                         break;
                     case ProjPrefab.proj_driller:
-                        refireTime = 0.22f / (player.m_overdrive ? 1.5f : 1f);
+                        refireTime = 0.10f / (player.m_overdrive ? 1.5f : 1f); // lowered to allow the burstfire to function
                         break;
                     case ProjPrefab.proj_shotgun:
                         refireTime = (player.m_overdrive ? 0.55f : 0.45f) / (player.m_overdrive ? 1.5f : 1f);
@@ -749,7 +770,8 @@ namespace GameMod
                         break;
                     case ProjPrefab.proj_thunderbolt:
                         refireTime = 0.5f / (player.m_overdrive ? 1.5f : 1f);
-                        projectileCount = 2;
+                        //projectileCount = 2;
+                        projectileCount = (MPShips.GetShip(player.c_player_ship).triTB ? 3 : 2);
                         break;
                     case ProjPrefab.proj_beam:
                         refireTime = (player.m_overdrive ? 0.29f : 0.23f) / (player.m_overdrive ? 1.5f : 1f);
@@ -775,13 +797,18 @@ namespace GameMod
                     case ProjPrefab.missile_devastator:
                         refireTime = 1f;
                         break;
-
+                
                     // Don't fire what we don't know about.
                     default:
-                        Debug.Log($"{DateTime.Now:MM/dd/yyyy hh:mm:ss.fff tt} - Fire packet dropped, invalid projectile: {player.m_mp_name} - {msg.m_type}");
-                        return;
+                        if ((int)msg.m_type < (int)ProjPrefab.num) // It's a stock projectile, but not a valid one. Let all extension projectiles through.
+                        {
+                            Debug.Log($"{DateTime.Now:MM/dd/yyyy hh:mm:ss.fff tt} - Fire packet dropped, invalid projectile: {player.m_mp_name} - {msg.m_type}");
+                            return;
+                        }
+                        refireTime = 0.01f; // generic fast time
+                        break;
                 }
-
+                
                 if (_primaries.Contains(msg.m_type))
                 {
                     _primaryFireBuffer[key] += refireTime / projectileCount;
@@ -831,7 +858,6 @@ namespace GameMod
                     }
                 }
             }
-
             ProjectileManager.PlayerFire(player, msg.m_type, msg.m_pos, msg.m_rot, msg.m_strength, msg.m_upgrade_lvl, msg.m_no_sound, msg.m_slot, msg.m_force_id);
         }
 
@@ -982,6 +1008,7 @@ namespace GameMod
         }
     }
 
+    /*
     /// <summary>
     /// In base Overload, energy is only deducted from the player's total on the server, and then it synchronizes that energy amount to the client.  Instead, we are going to keep track of the energy on the client and sync it to the server.  Since everywhere where energy is used in this function check Server.IsActive, we instead redirect to our own function MPSniperPackets.AlwaysUseEnergy, which always returns true, and thus always deducts energy regardless as to whether it's on the server or the client.
     /// 
@@ -1007,6 +1034,7 @@ namespace GameMod
             }
         }
     }
+    */
 
     /// <summary>
     /// We want the client to control what weapon they are using, so if this function is called by the server, we ignore the call.
@@ -1042,6 +1070,7 @@ namespace GameMod
         }
     }
 
+    /*
     /// <summary>
     /// Here, we are attaching to the end of PlayerShip.ProcessFiringControls to synchronize a player's resource when they release the primary fire key and the boost key, two sources of frequent resource use.
     /// 
@@ -1102,6 +1131,7 @@ namespace GameMod
             }
         }
     }
+    */
 
     /// <summary>
     /// Similar to MaybeFireWeapon, we redirect Projectile.PlayerFire to MPSniperPackets.MaybePlayerFire in order for the client to control where the flare gets fired from.

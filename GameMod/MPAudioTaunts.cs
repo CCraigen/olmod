@@ -126,30 +126,38 @@ namespace GameMod
             [HarmonyPatch(typeof(GameManager), "Awake")]
             class MPAudioTaunts_GameManager_Awake
             {
-                static void Postfix(){
-                    if (String.IsNullOrEmpty(LocalAudioTauntDirectory)){
+                static void Postfix()
+                {
+                    if (String.IsNullOrEmpty(LocalAudioTauntDirectory))
+                    {
                         LocalAudioTauntDirectory = Path.Combine(Application.persistentDataPath, "AudioTaunts");
-                        if (!Directory.Exists(LocalAudioTauntDirectory)){
+                        if (!Directory.Exists(LocalAudioTauntDirectory))
+                        {
                             Debug.Log("Did not find a directory for local audiotaunts, creating one at: " + LocalAudioTauntDirectory);
                             Directory.CreateDirectory(LocalAudioTauntDirectory);
                         }
 
                         ExternalAudioTauntDirectory = Path.Combine(LocalAudioTauntDirectory, "external");
-                        if (!Directory.Exists(ExternalAudioTauntDirectory)){
+                        if (!Directory.Exists(ExternalAudioTauntDirectory))
+                        {
                             Debug.Log("Did not find a directory for external audiotaunts, creating one at: " + ExternalAudioTauntDirectory);
                             Directory.CreateDirectory(ExternalAudioTauntDirectory);
                         }
                     }
 
-                    if (!GameplayManager.IsDedicatedServer()){
-                        for (int i = 0; i < asc.Length; i++){
+                    if (!GameplayManager.IsDedicatedServer())
+                    {
+                        for (int i = 0; i < asc.Length; i++)
+                        {
                             asc[i] = new AudioSourceContainer();
                         }
 
                         ImportAudioTaunts(LocalAudioTauntDirectory, new List<string>(), false);
                         ImportAudioTaunts(ExternalAudioTauntDirectory, new List<string>(), true);
-                        for (int i = 0; i < 6; i++){
-                            local_taunts[i] = new AudioTaunt{
+                        for (int i = 0; i < 6; i++)
+                        {
+                            local_taunts[i] = new AudioTaunt
+                            {
                                 hash = "EMPTY",
                                 name = "EMPTY",
                                 audioclip = null,
@@ -181,7 +189,8 @@ namespace GameMod
                 }
 
                 // transpiler
-                static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> codes) {
+                static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> codes)
+                {
                     // This patches the next call of Server.IsDedicatedServer() call after
                     // a StartCoroutine was called to just pushing true onto the stack instead.
                     // We play safe here becuase other patches might add IsDedicatedServer() calls
@@ -189,17 +198,21 @@ namespace GameMod
                     // StartCoroutine was called.
                     int state = 0;
 
-                    foreach (var code in codes){
+                    foreach (var code in codes)
+                    {
                         // patch GetExecutingAssembly to use GetOverloadAssembly instead
-                        if (code.opcode == OpCodes.Call && ((MethodInfo)code.operand).Name == "GetExecutingAssembly"){
+                        if (code.opcode == OpCodes.Call && ((MethodInfo)code.operand).Name == "GetExecutingAssembly")
+                        {
                             var method = AccessTools.Method(typeof(MPAudioTaunts_GameManager_Awake), "GetOverloadAssembly");
                             yield return new CodeInstruction(OpCodes.Call, method);
                             continue;
                         }
-                        if (state == 0 && code.opcode == OpCodes.Call && ((MethodInfo)code.operand).Name == "StartCoroutine"){
+                        if (state == 0 && code.opcode == OpCodes.Call && ((MethodInfo)code.operand).Name == "StartCoroutine")
+                        {
                             state = 1;
                         }
-                        else if (state == 1 && code.opcode == OpCodes.Call && ((MethodInfo)code.operand).Name == "IsDedicatedServer"){
+                        else if (state == 1 && code.opcode == OpCodes.Call && ((MethodInfo)code.operand).Name == "IsDedicatedServer")
+                        {
                             // this is the first IsDedicatedServer call after StartCoroutine
                             yield return new CodeInstruction(OpCodes.Ldc_I4_1); // push true on the stack instead
                             state = 2; // do not patch other invocations of StartCoroutine
@@ -228,24 +241,29 @@ namespace GameMod
                 }
             }
 
-            public static void Reload(){
+            public static void Reload()
+            {
 
-                if (String.IsNullOrEmpty(LocalAudioTauntDirectory)){
+                if (String.IsNullOrEmpty(LocalAudioTauntDirectory))
+                {
                     LocalAudioTauntDirectory = Path.Combine(Application.persistentDataPath, "AudioTaunts");
 
-                    if (!Directory.Exists(LocalAudioTauntDirectory)){
+                    if (!Directory.Exists(LocalAudioTauntDirectory))
+                    {
                         Debug.Log("Did not find a directory for local audiotaunts, creating one at: " + LocalAudioTauntDirectory);
                         Directory.CreateDirectory(LocalAudioTauntDirectory);
                     }
 
                     ExternalAudioTauntDirectory = Path.Combine(LocalAudioTauntDirectory, "external");
-                    if (!Directory.Exists(ExternalAudioTauntDirectory)){
+                    if (!Directory.Exists(ExternalAudioTauntDirectory))
+                    {
                         Debug.Log("Did not find a directory for external audiotaunts, creating one at: " + ExternalAudioTauntDirectory);
                         Directory.CreateDirectory(ExternalAudioTauntDirectory);
                     }
                 }
 
-                if (!GameplayManager.IsDedicatedServer()){
+                if (!GameplayManager.IsDedicatedServer())
+                {
                     AClient.taunts = new List<AudioTaunt>();
                     for (int i = 0; i < AClient.asc.Length; i++)
                         AClient.asc[i] = new AudioSourceContainer();
@@ -253,7 +271,8 @@ namespace GameMod
 
                     AClient.ImportAudioTaunts(AClient.LocalAudioTauntDirectory, new List<string>(), false, true);
                     AClient.ImportAudioTaunts(AClient.ExternalAudioTauntDirectory, new List<string>(), true, true);
-                    for (int i = 0; i < 6; i++){
+                    for (int i = 0; i < 6; i++)
+                    {
                         AClient.local_taunts[i] = new AudioTaunt
                         {
                             hash = "EMPTY",
@@ -282,14 +301,16 @@ namespace GameMod
 
                 bool load_all_files = files_to_load == null | files_to_load.Count == 0;
                 var fileInfo = new DirectoryInfo(path_to_directory).GetFiles();
-                foreach (FileInfo file in fileInfo){
+                foreach (FileInfo file in fileInfo)
+                {
                     if ((files_to_load.Contains(file.Name) | load_all_files)    // if this file or all files got requested
                         && taunts.Find(t => t.name.Equals(file.Name)) == null   // if it hasnt been loaded before
                         && file.Extension.Equals(".ogg")                        // we only accept .ogg for now
                         && file.Length <= AUDIO_TAUNT_SIZE_LIMIT)               // limit the taunt size
                     {
 
-                        AudioTaunt t = new AudioTaunt{
+                        AudioTaunt t = new AudioTaunt
+                        {
                             hash = CalculateMD5ForFile(Path.Combine(path_to_directory, file.Name)),
                             name = file.Name,
                             audio_taunt_data = File.ReadAllBytes(Path.Combine(path_to_directory, file.Name)),
@@ -301,15 +322,18 @@ namespace GameMod
                             requested_taunt = false
                         };
                         
-                        if (t.name.StartsWith(t.hash)){
+                        if (t.name.StartsWith(t.hash))
+                        {
                             t.name = t.name.Remove(0, t.hash.Length + 1);
                         }
-                        else{
+                        else
+                        {
                             File.Move(Path.Combine(path_to_directory, file.Name), Path.Combine(path_to_directory, t.hash + "-" + file.Name));
                         }
 
                         taunts.Add(t);
-                        if(!silent){
+                        if(!silent)
+                        {
                             Debug.Log(string.Format("  Added {0,-67}  size: {1,6} as an AudioTaunt",
                             file.Name,
                             file.Length
@@ -357,11 +381,13 @@ namespace GameMod
                 return -1;
             }
 
-            public static int GetNextIndexThatStartsWithStringSequence(int start_index, int current_index,string start_sequence){
+            public static int GetNextIndexThatStartsWithStringSequence(int start_index, int current_index,string start_sequence)
+            {
                 if (start_index < 0 | start_index >= taunts.Count | current_index < 0 | current_index >= taunts.Count)
                     return -1;
 
-                if (taunts[current_index].name.ToUpper().StartsWith(start_sequence.ToUpper())){
+                if (taunts[current_index].name.ToUpper().StartsWith(start_sequence.ToUpper()))
+                {
                     int next_index = GetNextSelectableAudioTauntIndex(current_index, 1);
                     if(taunts[next_index].name.ToUpper().StartsWith(start_sequence.ToUpper()))
                     return next_index;
@@ -374,13 +400,16 @@ namespace GameMod
                 return -1;
             }
 
-            public static bool IsContainedInLocalTaunts(string hash){
+            public static bool IsContainedInLocalTaunts(string hash)
+            {
                 if (String.IsNullOrEmpty(hash))
                     return false;
 
                 bool isContained = false;
-                for (int j = 0; j < local_taunts.Length; j++){
-                    if (local_taunts[j].hash.Equals(hash)){
+                for (int j = 0; j < local_taunts.Length; j++)
+                {
+                    if (local_taunts[j].hash.Equals(hash))
+                    {
                         isContained = true;
                         break;
                     }
@@ -388,10 +417,12 @@ namespace GameMod
                 return isContained;
             }
 
-            private static AudioClip LoadAsAudioClip(string filename, string directory_path){
+            private static AudioClip LoadAsAudioClip(string filename, string directory_path)
+            {
                 //Debug.Log("  Attempting to load file as audio clip: " + filename);
                 string path = Path.Combine(directory_path, filename);
-                if (path != null){
+                if (path != null)
+                {
                     WWW www = new WWW("file:///" + path);
                     while (!www.isDone) { }
                     if (string.IsNullOrEmpty(www.error)){
@@ -402,8 +433,10 @@ namespace GameMod
                 return null;
             }
 
-            public static bool IsKeyCodeAlreadyUsed(int keycode){
-                for (int i = 0; i < keybinds.Length; i++){
+            public static bool IsKeyCodeAlreadyUsed(int keycode)
+            {
+                for (int i = 0; i < keybinds.Length; i++)
+                {
                     if (keybinds[i] == keycode)
                         return true;
                 }
@@ -411,9 +444,12 @@ namespace GameMod
             }
 
             // used to calculate a hash for each audio taunt file to avoid filename collisions
-            public static string CalculateMD5ForFile(string path_to_file){
-                using (var md5 = MD5.Create()){
-                    using (var stream = File.OpenRead(path_to_file)){
+            public static string CalculateMD5ForFile(string path_to_file)
+            {
+                using (var md5 = MD5.Create())
+                {
+                    using (var stream = File.OpenRead(path_to_file))
+                    {
                         var hash = md5.ComputeHash(stream);
                         return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
                     }
@@ -422,14 +458,19 @@ namespace GameMod
 
             // Splits the hashes that get stored as a single string in loaded_local_taunts and finds the corresponding taunts
             // to populate the 6 audio taunt slots. '/' is used as the seperator of the slots
-            public static void LoadLocalAudioTauntsFromPilotPrefs(){
+            public static void LoadLocalAudioTauntsFromPilotPrefs()
+            {
                 string[] file_hashes = loaded_local_taunts.Split('/');
                 int index = 0;
-                foreach (string hash in file_hashes){
-                    if (index < 6){
+                foreach (string hash in file_hashes)
+                {
+                    if (index < 6)
+                    {
                         AudioTaunt at = taunts.Find(t => t.hash.Equals(hash) && !t.is_external_taunt);
-                        if (at == null){
-                            at = new AudioTaunt{
+                        if (at == null)
+                        {
+                            at = new AudioTaunt
+                            {
                                 hash = "EMPTY",
                                 name = "EMPTY",
                                 audioclip = null,

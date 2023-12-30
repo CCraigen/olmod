@@ -36,13 +36,40 @@ namespace GameMod {
             get { return _mms_scale_respawn_time && (MenuManager.mms_mode == ExtMatchMode.TEAM_ANARCHY || MenuManager.mms_mode == ExtMatchMode.CTF || MenuManager.mms_mode == ExtMatchMode.MONSTERBALL); }
             set { _mms_scale_respawn_time = value; }
         }
-        public static bool mms_classic_spawns { get; set; }
+
+        private static bool mms_classic_spawns_internal;
+        public static bool mms_classic_spawns
+        {
+            get
+            {
+                return mms_classic_spawns_internal;
+            }
+            set
+            {
+                mms_classic_spawns_internal = value;
+                MPWeapons.SetReflexSlotEnabled();
+            }
+        }
         public static bool mms_always_cloaked { get; set; }
         public static bool mms_allow_smash { get; set; }
         public static bool mms_damage_numbers { get; set; }
         public static bool mms_client_damage_numbers { get; set; } = true;
         public static bool mms_assist_scoring { get; set; } = true;
-        public static bool mms_team_color_default { get; set; } = true;
+
+        // adjusted to keep team default colors in CTF due to the map colors not changing to match the custom teams
+        private static bool _team_color_default = true;
+        public static bool mms_team_color_default
+        {
+            get
+            {
+                return (MPModPrivateData.MatchMode == ExtMatchMode.CTF) ? true : _team_color_default;
+            }
+            set
+            {
+                _team_color_default = value;
+            }
+        }
+
         public static int mms_team_color_self = 5;
         public static int mms_team_color_enemy = 6;
         public static bool mms_creeper_colors { get; set; } = true;
@@ -116,6 +143,65 @@ namespace GameMod {
             }
         }
 
+        public static int mms_ships_allowed
+        {
+            get
+            {
+                return MPShips.allowed;
+            }
+            set
+            {
+                MPShips.allowed = value;
+                MPWeapons.UpdateWeaponList();
+            }
+        }
+
+        private static int mms_ship_scale_internal = 0;
+        public static int mms_ship_scale
+        {
+            get
+            {
+                return mms_ship_scale_internal;
+            }
+            set
+            {
+                mms_ship_scale_internal = value;
+                switch (value)
+                {
+                    case 0:
+                        MPShips.masterscale = 1f;
+                        break;
+                    case 1:
+                        MPShips.masterscale = 0.9f;
+                        break;
+                    case 2:
+                        MPShips.masterscale = 0.8f;
+                        break;
+                    case 3:
+                        MPShips.masterscale = 0.7f;
+                        break;
+                }
+            }
+        }
+
+        public static string GetMMSShipScale()
+        {
+            switch (mms_ship_scale)
+            {
+                case 0:
+                    return "100%";
+                case 1:
+                    return "90%";
+                case 2:
+                    return "80%";
+                case 3:
+                    return "70%";
+                default:
+                    return "UNKNOWN";
+            }
+        }
+
+
         public static string GetMMSAlwaysCloaked()
         {
             return MenuManager.GetToggleSetting(Convert.ToInt32(mms_always_cloaked));
@@ -164,6 +250,42 @@ namespace GameMod {
                     return "105% Mesh";
                 case 3:
                     return "110% Mesh";
+            }
+        }
+
+        public static string GetMMSShipsAllowed()
+        {
+            string ret;
+            switch (mms_ships_allowed)
+            {
+                case 0:
+                    ret = "OFF";
+                    break;
+                case 1:
+                    ret = "ON";
+                    break;
+                default:
+                    ret = MPShips.Ships[mms_ships_allowed - 2].displayName;
+                    break;
+            }
+            return ret;
+        }
+
+        public static string GetMMSShipType()
+        {
+            return MPShips.Ships[MPShips.selected_idx].displayName;
+        }
+
+        public static string GetMMSShipDescription(int line)
+        {
+            string[] lines = MPShips.Ships[MPShips.selected_idx].description;
+            if (line < lines.Length)
+            {
+                return lines[line];
+            }
+            else
+            {
+                return "";
             }
         }
 
@@ -260,6 +382,7 @@ namespace GameMod {
         public static bool mms_show_framerate = false;
         public static int mms_selected_loadout_idx = 0;
         public static int mms_collision_mesh = 0;
+        //public static int mms_ships_allowed = 0; // Moved to property, further up
     }
 
 
@@ -281,15 +404,21 @@ namespace GameMod {
 
         private static void DrawRightColumn(UIElement uie, ref Vector2 position)
         {
+            float yOffset = 52f;
             col_bot = position.y;
             position.x += 600f;
             position.y = col_top - 250f;
             uie.SelectAndDrawStringOptionItem(Loc.LS("ALLOW REAR VIEW CAMERA"), position, 11, Menus.GetMMSRearViewPIP(), Loc.LS("CLIENTS CAN CHOOSE TO HAVE REAR VIEW"), 1f, false);
-            position.y += 55f;
+
+            // CCF this is getting temporarily hidden to make some menu space. Tobias is cooking up a new menu that should fix this.
+
+            position.y += yOffset;
             uie.SelectAndDrawStringOptionItem(Loc.LS("ALWAYS CLOAKED"), position, 15, Menus.GetMMSAlwaysCloaked(), Loc.LS("SHIPS ARE ALWAYS CLOAKED"), 1f, false);
-            position.y += 55f;
+            // END HIDE
+
+            position.y += yOffset;
             uie.SelectAndDrawStringOptionItem(Loc.LS("CLASSIC SPAWNS"), position, 13, Menus.GetMMSClassicSpawns(), Loc.LS("SPAWN WITH IMPULSE+ DUALS AND FALCONS"), 1f, false);
-            position.y += 55f;
+            position.y += yOffset;
 
             if (MenuManager.mms_mode == ExtMatchMode.CTF)
             {
@@ -300,19 +429,26 @@ namespace GameMod {
                 uie.SelectAndDrawStringOptionItem(Loc.LS("ASSISTS"), position, 18, Menus.GetMMSAssistScoring(), Loc.LS("AWARD POINTS FOR ASSISTING WITH KILLS"), 1f, false);
             }
 
-            position.y += 55f;
+            position.y += yOffset;
             uie.SelectAndDrawStringOptionItem(Loc.LS("PROJECTILE DATA"), position, 16, Menus.mms_mp_projdata_fn == "STOCK" ? "STOCK" : System.IO.Path.GetFileName(Menus.mms_mp_projdata_fn), string.Empty, 1f, false);
-            position.y += 55f;
+            position.y += yOffset;
 
             uie.SelectAndDrawStringOptionItem(Loc.LS("ALLOW SMASH ATTACK"), position, 17, Menus.GetMMSAllowSmash(), Loc.LS("ALLOWS PLAYERS TO USE THE SMASH ATTACK"), 1f, false);
-            position.y += 55f;
+            position.y += yOffset;
 
             uie.SelectAndDrawStringOptionItem(Loc.LS("TB PENETRATION"), position, 20, MPThunderboltPassthrough.isAllowed ? "ON" : "OFF", Loc.LS("ALLOWS THUNDERBOLT SHOTS TO PENETRATE SHIPS"), 1f, false);
-            position.y += 55f;
+            position.y += yOffset;
             uie.SelectAndDrawStringOptionItem(Loc.LS("DAMAGE NUMBERS"), position, 21, Menus.GetMMSDamageNumbers(), Loc.LS("SHOWS THE DAMAGE YOU DO TO OTHER SHIPS"), 1f, false);
 
-            position.y += 55f;
+            position.y += yOffset;
             uie.SelectAndDrawStringOptionItem(Loc.LS("COLLISION MESH"), position, 22, Menus.GetMMSCollisionMesh(), Loc.LS("COLLIDER TO USE FOR PROJECTILE->SHIP COLLISIONS"), 1f, false);
+
+            position.y += yOffset;
+            uie.SelectAndDrawStringOptionItem(Loc.LS("CUSTOM SHIPS"), position, 23, Menus.GetMMSShipsAllowed(), Loc.LS("ALLOW PLAYERS TO CHOOSE THEIR SHIP TYPE"), 1f, false);
+
+            // THIS IS NOT READY YET.
+            //position.y += yOffset;
+            //uie.SelectAndDrawStringOptionItem(Loc.LS("SHIP SCALE"), position, 24, Menus.GetMMSShipScale(), Loc.LS("SCALES DOWN ALL SHIPS TO A CERTAIN FACTOR"), 1f, false);
         }
 
         private static void AdjustAdvancedPositionCenterColumn(ref Vector2 position)
@@ -459,7 +595,7 @@ namespace GameMod {
                     __instance.SelectAndDrawStringOptionItem(Loc.LS("SHOW TEXT FOR AUDIO MESSAGES"), position, 7, MenuManager.GetTextForAudio(), Loc.LS("DISPLAYS ENGLISH TEXT FOR COMM AND LOG AUDIO MESSAGES"), 1.5f, false);
                     position.y += 62f;
                     __instance.SelectAndDrawStringOptionItem(Loc.LS("COCKPIT SWAY"), position, 3, MenuManager.GetHUDSway(), Loc.LS("ADD MOTION TO COCKPIT WHEN MOVING"), 1.5f, false);
-                    
+
                     break;
                 case 1:
                     __instance.SelectAndDrawStringOptionItem(Loc.LS("SHOW SPEEDRUN TIMERS"), position, 8, (!MenuManager.opt_speedrun_timers) ? Loc.LS("NO") : Loc.LS("YES"), Loc.LS("SHOW CURRENT LEVEL AND MISSION TIME ON HUD"), 1.5f, false);
@@ -512,11 +648,11 @@ namespace GameMod {
                     case 13:
                         Menus.mms_classic_spawns = !Menus.mms_classic_spawns;
                         MenuManager.PlayCycleSound(1f, (float)UIManager.m_select_dir);
-                        // Re-enables Reflex drops in classic spawn mode by default. 
-                        if (Menus.mms_classic_spawns)
+                        // Re-enables Reflex drops in classic spawn mode by default.
+                        /*if (Menus.mms_classic_spawns)
                         {
                             MenuManager.mms_powerup_filter[2] = true;
-                        }
+                        }*/
                         break;
                     case 14:
                         Menus.mms_ctf_boost = !Menus.mms_ctf_boost;
@@ -575,7 +711,14 @@ namespace GameMod {
                         Menus.mms_collision_mesh = (4 + Menus.mms_collision_mesh + UIManager.m_select_dir) % 4;
                         MenuManager.PlayCycleSound(1f, (float)UIManager.m_select_dir);
                         break;
-
+                    case 23:
+                        Menus.mms_ships_allowed = (MPShips.Ships.Count + 2 + Menus.mms_ships_allowed + UIManager.m_select_dir) % (MPShips.Ships.Count + 2);
+                        MenuManager.PlayCycleSound(1f, (float)UIManager.m_select_dir);
+                        break;
+                    case 24:
+                        Menus.mms_ship_scale = (4 + Menus.mms_ship_scale - UIManager.m_select_dir) % 4; // Scroll this list backwards. Why not.
+                        MenuManager.PlayCycleSound(1f, (float)UIManager.m_select_dir);
+                        break;
                 }
             }
             else if (MenuManager.m_menu_micro_state == 10)
@@ -787,13 +930,12 @@ namespace GameMod {
                         {
                             // Draws the Item slider for selecting an audio taunt
                             __instance.SelectAndDrawStringOptionItem("", position, 16 + i, MPAudioTaunts.AClient.local_taunts[i].name, string.Empty, 0.49f, false);
-                            
 
                             // Draws the buttons that play the selected audio taunt of the respective slot
                             position.x -= 171f;
                             __instance.TestMouseInRect(position, 25f, 25f, 1610 + i, true);
                             bool highlighted = UIManager.m_menu_selection == 1610 + i;
-                            if (highlighted) 
+                            if (highlighted)
                                 MenuManager.option_dir = false;
                             Color color = Color.Lerp(UIManager.m_col_ui5, UIManager.m_col_ui6, UnityEngine.Random.Range(0f, 0.15f * UIElement.FLICKER) + ((!__instance.m_fade_die) ? 0f : 0.5f));
                             UIManager.DrawQuadBarHorizontal(position, 14f, 24f, 14f, 0.2f * UIManager.m_col_ub0, 12);
@@ -1185,7 +1327,7 @@ namespace GameMod {
                                         if (MPAudioTaunts.AClient.initialized)
                                         {
                                             // do not allow the selected audiotaunts to change after the sharing of the taunts began
-                                            if(NetworkMatch.GetMatchState() != MatchState.PLAYING 
+                                            if(NetworkMatch.GetMatchState() != MatchState.PLAYING
                                                 & NetworkMatch.GetMatchState() != MatchState.LOBBY
                                                 & NetworkMatch.GetMatchState() != MatchState.LOBBY_LOAD_COUNTDOWN
                                                 & NetworkMatch.GetMatchState() != MatchState.LOBBY_LOADING_SCENE
@@ -1813,7 +1955,7 @@ namespace GameMod {
                             }
                             MenuManager.UnReverseOption();
                         }
-                    }                    
+                    }
                 }
             }
             else if ((float)_MenuManager_m_menu_state_timer_Field.GetValue(null) > 0.25f)
@@ -1918,6 +2060,18 @@ namespace GameMod {
                     DrawMpLoadout(__instance, position, 1);
                     position.y += 95f;
                     DrawMpLoadout(__instance, position, 3);
+
+                    // CCF ship selection
+                    position.x = 0f;
+                    position.y += 105f;
+                    __instance.SelectAndDrawStringOptionItem(Loc.LS("PREFERRED SHIP TYPE"), position, 4, Menus.GetMMSShipType(), Loc.LS("SHIP TYPE TO USE (IF PERMITTED)"), 1.2f, false);
+
+                    position.y += 50f;
+                    __instance.DrawStringSmall(Menus.GetMMSShipDescription(0), position, 0.45f, StringOffset.CENTER, UIManager.m_col_ui4, 1f);
+                    position.y += 22f;
+                    __instance.DrawStringSmall(Menus.GetMMSShipDescription(1), position, 0.45f, StringOffset.CENTER, UIManager.m_col_ui4, 1f);
+                    position.y += 22f;
+                    __instance.DrawStringSmall(Menus.GetMMSShipDescription(2), position, 0.45f, StringOffset.CENTER, UIManager.m_col_ui4, 1f);
                 }
                 position.x = 0f;
                 position.y = 280f;
@@ -1948,24 +2102,24 @@ namespace GameMod {
                 if (idx % 2 == 0)
                 {
                     WeaponType weaponType = GetMpLoadoutWeapon(idx, 0);
-                    __instance.SelectAndDrawMicroItem(Player.WeaponNames[(int)weaponType], pos, 10 + 3 * idx, false, (int)(26 + weaponType), 0.31f);
+                    __instance.SelectAndDrawMicroItem(Player.WeaponNames[(int)weaponType], pos, 10 + 3 * idx, false, MPWeapons.primaries[(int)weaponType].icon_idx, 0.31f);
                     pos.x += num;
                     MissileType missileType = GetMpLoadoutMissile(idx, 0);
-                    __instance.SelectAndDrawMicroItem(Player.MissileNames[(int)missileType], pos, 11 + 3 * idx, false, (int)(104 + missileType), 0.31f);
+                    __instance.SelectAndDrawMicroItem(Player.MissileNames[(int)missileType], pos, 11 + 3 * idx, false, MPWeapons.secondaries[(int)missileType].icon_idx, 0.31f);
                     pos.x += num;
                     missileType = GetMpLoadoutMissile(idx, 1);
-                    __instance.SelectAndDrawMicroItem(Player.MissileNames[(int)missileType], pos, 12 + 3 * idx, false, (int)(104 + missileType), 0.31f);
+                    __instance.SelectAndDrawMicroItem(Player.MissileNames[(int)missileType], pos, 12 + 3 * idx, false, MPWeapons.secondaries[(int)missileType].icon_idx, 0.31f);
                 }
                 else
                 {
                     WeaponType weaponType = GetMpLoadoutWeapon(idx, 0);
-                    __instance.SelectAndDrawMicroItem(Player.WeaponNames[(int)weaponType], pos, 13 + 3 * (idx - 1), false, (int)(26 + weaponType), 0.31f);
+                    __instance.SelectAndDrawMicroItem(Player.WeaponNames[(int)weaponType], pos, 13 + 3 * (idx - 1), false, MPWeapons.primaries[(int)weaponType].icon_idx, 0.31f);
                     pos.x += num;
                     weaponType = GetMpLoadoutWeapon(idx, 1);
-                    __instance.SelectAndDrawMicroItem(Player.WeaponNames[(int)weaponType], pos, 14 + 3 * (idx - 1), false, (int)(26 + weaponType), 0.31f);
+                    __instance.SelectAndDrawMicroItem(Player.WeaponNames[(int)weaponType], pos, 14 + 3 * (idx - 1), false, MPWeapons.primaries[(int)weaponType].icon_idx, 0.31f);
                     pos.x += num;
                     MissileType missileType = GetMpLoadoutMissile(idx, 0);
-                    __instance.SelectAndDrawMicroItem(Player.MissileNames[(int)missileType], pos, 15 + 3 * (idx - 1), false, (int)(104 + missileType), 0.31f);
+                    __instance.SelectAndDrawMicroItem(Player.MissileNames[(int)missileType], pos, 15 + 3 * (idx - 1), false, MPWeapons.secondaries[(int)missileType].icon_idx, 0.31f);
                 }
             }
 
@@ -2240,6 +2394,11 @@ namespace GameMod {
                                     int menu_selection3 = UIManager.m_menu_selection;
                                     switch (menu_selection3)
                                     {
+                                        case 4:
+                                            // ship selection
+                                            MPShips.selected_idx = (MPShips.Ships.Count + MPShips.selected_idx + UIManager.m_select_dir) % MPShips.Ships.Count;
+                                            MenuManager.PlayCycleSound(1f, (float)UIManager.m_select_dir);
+                                            break;
                                         case 10:
                                             MPLoadouts.MpCycleWeapon(0, 0);
                                             MenuManager.PlayCycleSound(1f, 1f);

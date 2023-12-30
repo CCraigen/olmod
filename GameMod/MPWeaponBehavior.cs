@@ -9,7 +9,7 @@ namespace GameMod
 {
     public class MPWeaponBehavior
     {
-
+        /*
         /// <summary>
         /// Thunderbolt Tweaks
         /// </summary>
@@ -17,9 +17,10 @@ namespace GameMod
         {
             private static int m_charge_loop_index = -1;
             private static float m_tb_overchargedamage_multiplier = 4f; // 4.0dps self-damage instead of stock 1.0dps)
-            private static float m_muzzle_adjust = 0.2f; // Projectile exit point offsets
+            //public static float m_muzzle_adjust = 0.2f; // Projectile exit point offsets -- now handled by the definitions in MPShips using local object scaling
 
-            private static void StopThunderboltSelfDamageLoop()
+            /*
+            public static void StopThunderboltSelfDamageLoop()
             {
                 if (m_charge_loop_index != -1)
                 {
@@ -27,17 +28,20 @@ namespace GameMod
                     m_charge_loop_index = -1;
                 }
             }
+            */
 
+            /*
             private static float GetThunderboltSelfDamageMultiplier()
             {
                 return GameplayManager.IsMultiplayer ? m_tb_overchargedamage_multiplier : 1f;
             }
+            */
 
+            /*
             // Self damage and charge time
             [HarmonyPatch(typeof(PlayerShip), "ThunderCharge")]
             class MPWeaponBehavior_Thunderbolt_PlayerShip_ThunderCharge
             {
-
                 static void Prefix(PlayerShip __instance)
                 {
                     if (__instance.m_refire_time <= 0f && __instance.m_thunder_power == 0f)
@@ -56,7 +60,7 @@ namespace GameMod
                 // Override self-damage ramping
                 static float GetSelfChargeDamage(float num, PlayerShip playerShip)
                 {
-                    return GetThunderboltSelfDamageMultiplier() * num;
+                    return GetThunderboltSelfDamageMultiplier() * num * (MPShips.GetShip(playerShip).triTB ? 1.5f : 1f); // if you're running triple TB, you'd better watch your charge.
                 }
 
                 static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> codes)
@@ -78,59 +82,24 @@ namespace GameMod
                         yield return code;
                     }
                 }
+                
 
                 [HarmonyPatch(typeof(PlayerShip), "MaybeFireWeapon")]
                 class MPWeaponBehavior_Thunderbolt_PlayerShip_MaybeFireWeapon
                 {
-
-                    private static Vector3 AdjustLeftPos(Vector3 muzzle_pos, Vector3 c_right)
-                    {
-                        return GameplayManager.IsMultiplayerActive ? muzzle_pos + c_right * m_muzzle_adjust : muzzle_pos;
-                    }
-
-                    private static Vector3 AdjustRightPos(Vector3 muzzle_pos, Vector3 c_right)
-                    {
-                        return GameplayManager.IsMultiplayerActive ? muzzle_pos + c_right * -m_muzzle_adjust : muzzle_pos;
-                    }
-
                     static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> codes)
                     {
-                        int state = 0;
+                        //int state = 0;
                         foreach (var code in codes)
                         {
-                            // case WeaponType.THUNDERBOLT:
-                            if (state == 0 && code.opcode == OpCodes.Ldc_I4_S && (sbyte)code.operand == 27)
-                                state++;
-
-                            // ProjectileManager.PlayerFire(this.c_player, type, this.m_muzzle_right.position, rot, this.m_thunder_power, this.c_player.m_weapon_level[(int)this.c_player.m_weapon_type], true, 0, -1);
-                            if (state == 1 && code.opcode == OpCodes.Callvirt && code.operand == AccessTools.Method(typeof(Transform), "get_position"))
-                            {
-                                state++;
-                                yield return code;
-                                yield return new CodeInstruction(OpCodes.Ldloc_2);
-                                yield return new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(MPWeaponBehavior_Thunderbolt_PlayerShip_MaybeFireWeapon), "AdjustRightPos"));
-                                continue;
-                            }
-
-                            // ProjectileManager.PlayerFire(this.c_player, type, this.m_muzzle_left.position, rot, this.m_thunder_power, this.c_player.m_weapon_level[(int)this.c_player.m_weapon_type], false, 1, -1);
-                            if (state == 2 && code.opcode == OpCodes.Callvirt && code.operand == AccessTools.Method(typeof(Transform), "get_position"))
-                            {
-                                state++;
-                                yield return code;
-                                yield return new CodeInstruction(OpCodes.Ldloc_2);
-                                yield return new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(MPWeaponBehavior_Thunderbolt_PlayerShip_MaybeFireWeapon), "AdjustLeftPos"));
-                                continue;
-                            }
+                            yield return code;
 
                             // this.m_thunder_sound_timer = 0f;
                             if (code.opcode == OpCodes.Stfld && code.operand == AccessTools.Field(typeof(PlayerShip), "m_thunder_sound_timer"))
                             {
-                                yield return code;
                                 yield return new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(MPWeaponBehavior.Thunderbolt), "StopThunderboltSelfDamageLoop"));
                                 continue;
                             }
-
-                            yield return code;
                         }
                     }
                 }
@@ -166,8 +135,11 @@ namespace GameMod
                 }
             }
         }
+        */
     }
 
+    // Not using this one, the multiship Cyclone weapon class takes care of this instead
+    /*
     /// <summary>
     /// Cyclone Tweaks
     /// </summary>
@@ -218,4 +190,5 @@ namespace GameMod
             }
         }
     }
+    */
 }

@@ -66,6 +66,8 @@ namespace GameMod
                 assistScoring = Menus.mms_assist_scoring,
                 teamCount = MPTeams.MenuManagerTeamCount,
                 shipMeshCollider = Menus.mms_collision_mesh,
+                shipsAllowed = Menus.mms_ships_allowed,
+                shipScale = Menus.mms_ship_scale,
                 thunderboltPassthrough = MPThunderboltPassthrough.isAllowed
             });
 
@@ -106,9 +108,11 @@ namespace GameMod
                 damageNumbers = true,
                 assistScoring = true,
                 teamCount = 2,
-                shipMeshCollider = 0,
+                shipMeshCollider = 2, // CCF this is temporary
+                shipsAllowed = 1, // CCF this is temporary
+                shipScale = 0,
                 thunderboltPassthrough = false
-            });
+            }) ;
 
             presets.Add(new MPMatchPreset
             {
@@ -146,13 +150,58 @@ namespace GameMod
                 allowSmash = false,
                 assistScoring = true,
                 teamCount = 2,
-                shipMeshCollider = 0,
                 damageNumbers = true,
+                shipMeshCollider = 2, // CCF this is temporary
+                shipsAllowed = 1, // CCF this is temporary
+                shipScale = 0,
                 thunderboltPassthrough = false
             });
 
+            presets.Add(new MPMatchPreset
+            {
+                title = "MULTISHIP",
+                matchMode = MatchMode.ANARCHY,
+                maxPlayers = 16,
+                friendlyFire = 0,
+                timeLimit = 15 * 60,
+                scoreLimit = 0,
+                respawnTime = 2,
+                respawnInvuln = 2,
+                showNames = MatchShowEnemyNames.NORMAL,
+                turnSpeedLimit = 2,
+                forceLoadout = 0,
+                forcePrimary1 = WeaponType.IMPULSE,
+                forcePrimary2 = WeaponType.NUM,
+                forceSecondary1 = MissileType.FALCON,
+                forceSecondary2 = MissileType.NUM,
+                forceModifier1 = 4,
+                forceModifier2 = 4,
+                powerupSpawn = 2,
+                powerupInitial = 2,
+                powerupBigSpawn = 1,
+                powerupFilter = new bool[] { true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true },
+                jipEnabled = true,
+                suddenDeathOvertime = false,
+                lapLimit = 0,
+                sniperPackets = true,
+                noCompression = true,
+                allowRearView = true,
+                scaleRespawnTime = false,
+                ctfCarrierBoostEnabled = false,
+                classicSpawnsEnabled = false,
+                alwaysCloaked = false,
+                allowSmash = false,
+                damageNumbers = true,
+                assistScoring = true,
+                teamCount = 2,
+                shipMeshCollider = 2,
+                shipsAllowed = 1,
+                shipScale = 0,
+                thunderboltPassthrough = true
+            });
+
             GameManager.m_gm.StartCoroutine(GetMatchPresets());
-        }        
+        }
 
         class MPMatchPreset
         {
@@ -191,7 +240,9 @@ namespace GameMod
             public bool damageNumbers;
             public bool assistScoring = true;
             public int teamCount = 2;
-            public int shipMeshCollider = 0;
+            public int shipMeshCollider;
+            public int shipsAllowed;
+            public int shipScale;
             public bool thunderboltPassthrough;
 
             public void Apply()
@@ -200,7 +251,7 @@ namespace GameMod
                 // disables reflex drops if classic spawns is off, regardless of the preset setting
                 if (!this.classicSpawnsEnabled)
                 {
-                    this.powerupFilter[2] = false;
+                    //this.powerupFilter[2] = false;
                 }
 
                 MenuManager.mms_mode = this.matchMode;
@@ -238,6 +289,8 @@ namespace GameMod
                 Menus.mms_assist_scoring = this.assistScoring;
                 MPTeams.MenuManagerTeamCount = this.teamCount;
                 Menus.mms_collision_mesh = this.shipMeshCollider;
+                Menus.mms_ships_allowed = this.shipsAllowed;
+                Menus.mms_ship_scale = this.shipScale;
                 MPThunderboltPassthrough.isAllowed = this.thunderboltPassthrough;
             }
         }
@@ -253,7 +306,7 @@ namespace GameMod
                 {
                     urls.Add(jUrl.Value<string>());
                 }
-            }            
+            }
 
             foreach (var url in urls)
             {
@@ -297,7 +350,7 @@ namespace GameMod
                 }
             }
         }
-        
+
         [HarmonyPatch(typeof(UIElement), "DrawMpMatchSetup")]
         class MPMatchPresetDrawMpMatchSetup
         {
@@ -348,7 +401,7 @@ namespace GameMod
             }
 
         }
-        
+
         // Process slider input
         [HarmonyPatch(typeof(MenuManager), "MpMatchSetup")]
         class MPMatchPresets_MenuManager_MpMatchSetup

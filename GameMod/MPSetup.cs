@@ -289,9 +289,13 @@ namespace GameMod {
                 MPAudioTaunts.AClient.audio_taunt_volume = ModPrefs.GetInt("MP_AUDIOTAUNT_VOLUME", 50);
                 MPAudioTaunts.AClient.display_audio_spectrum = ModPrefs.GetBool("MP_AUDIOTAUNT_SHOW_FREQUENCYBAND", true);
 
-                FramerateLimiter.target_framerate = ModPrefs.GetInt("TARGET_FRAMERATE", 0);
-
                 Menus.mms_collision_mesh = ModPrefs.GetInt("MP_COLLIDER_MESH", 0);
+
+                //MPShips.allowed = ModPrefs.GetInt("MP_SHIPS_ALLOWED", 1);
+                Menus.mms_ships_allowed = ModPrefs.GetInt("MP_SHIPS_ALLOWED", 1);
+                MPShips.selected_idx = ModPrefs.GetInt("MP_SHIP_TYPE", 0);
+
+                FramerateLimiter.target_framerate = ModPrefs.GetInt("TARGET_FRAMERATE", 0);
             }
             else // for compatibility with old olmod, no need to add new settings
             {
@@ -381,7 +385,12 @@ namespace GameMod {
             ModPrefs.SetInt("MP_AUDIOTAUNT_VOLUME", MPAudioTaunts.AClient.audio_taunt_volume);
             ModPrefs.SetBool("MP_AUDIOTAUNT_SHOW_FREQUENCYBAND", MPAudioTaunts.AClient.display_audio_spectrum);
             ModPrefs.SetInt("TARGET_FRAMERATE", FramerateLimiter.target_framerate);
+
             ModPrefs.SetInt("MP_COLLIDER_MESH", Menus.mms_collision_mesh);
+
+            //ModPrefs.SetInt("MP_SHIPS_ALLOWED", MPShips.allowed);
+            ModPrefs.SetInt("MP_SHIPS_ALLOWED", Menus.mms_ships_allowed);
+            ModPrefs.SetInt("MP_SHIP_TYPE", MPShips.selected_idx);
 
             ModPrefs.Flush(filename + "mod");
         }

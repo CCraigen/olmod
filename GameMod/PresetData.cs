@@ -65,7 +65,7 @@ namespace GameMod
             }
             else if (GameplayManager.IsMultiplayer)
             {
-                projData = MPModPrivateData.DEFAULT_PROJ_DATA;
+                projData = (MPShips.allowed == 0 ? MPModPrivateData.DEFAULT_PROJ_DATA : MPModPrivateData.MULTISHIP_PROJ_DATA);
             }
             else
             {
@@ -93,7 +93,7 @@ namespace GameMod
                 }
                 projData = GetData(ta, "projdata.txt");
             }
-
+            
             var index = projData.IndexOf("m_spinup_starting_time;");
             if (index != -1)
             {

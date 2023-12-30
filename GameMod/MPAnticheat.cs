@@ -4,12 +4,13 @@ using UnityEngine;
 
 namespace GameMod
 {
+    /*
     [HarmonyPatch(typeof(PlayerShip), "ProcessFiringControls")]
     internal class ProcessFiringControls
     {
         private static bool CanFire(PlayerShip __instance)
         {
-            return !__instance.m_boosting && __instance.m_wheel_select_state == WheelSelectState.NONE;
+            return (MPShips.FireWhileBoost || !__instance.m_boosting) && __instance.m_wheel_select_state == WheelSelectState.NONE;
         }
 
         private static void Prefix(PlayerShip __instance)
@@ -19,6 +20,7 @@ namespace GameMod
                 return;
             }
 
+            //if (!__instance.c_player.JustPressed(CCInput.FIRE_WEAPON))
             if (!(__instance.c_player.JustPressed(CCInput.FIRE_WEAPON) && CanFire(__instance)))
             {
                 return;
@@ -29,17 +31,20 @@ namespace GameMod
                 return;
             }
 
-            if (__instance.c_player.m_weapon_type != WeaponType.CRUSHER && __instance.c_player.m_weapon_type != WeaponType.LANCER) {
+            //if (__instance.c_player.m_weapon_type != WeaponType.CRUSHER && __instance.c_player.m_weapon_type != WeaponType.LANCER) {
+            if (MPWeapons.primaries[(int)__instance.c_player.m_weapon_type].firingMode != FiringMode.SEMI_AUTO)
+            {
                 return;
             }
 
             if (__instance.m_refire_time > 0)
             {
-                __instance.m_refire_time = Mathf.Max(__instance.m_refire_time, 1f / 20f);
+                __instance.m_refire_time = Mathf.Max(__instance.m_refire_time, 0.05f); // 1f / 20f
             }
             return;
         }
     }
+    */
 
     [HarmonyPatch(typeof(Controls), "ReadControlData")]
     internal class ReadControlData

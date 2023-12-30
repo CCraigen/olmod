@@ -139,7 +139,9 @@ namespace GameMod
 
             Func<bool> IsValidPrimary = () =>
             {
-                return MPLoadouts.Loadouts[loadoutIndex].weapons[weaponIndex] != WeaponType.REFLEX
+                //return (MPLoadouts.Loadouts[loadoutIndex].weapons[weaponIndex] != WeaponType.REFLEX
+                //    && MPLoadouts.Loadouts[loadoutIndex].weapons.Count(x => x == MPLoadouts.Loadouts[loadoutIndex].weapons[weaponIndex]) <= 1;
+                return (MPWeapons.ReflexEnabled || MPLoadouts.Loadouts[loadoutIndex].weapons[weaponIndex] != WeaponType.REFLEX)
                     && MPLoadouts.Loadouts[loadoutIndex].weapons.Count(x => x == MPLoadouts.Loadouts[loadoutIndex].weapons[weaponIndex]) <= 1;
             };
 
@@ -299,11 +301,14 @@ namespace GameMod
                 MPLoadouts.NetworkLoadouts[msg.lobby_id] = msg;
             }
 
-            // Add free Reflex sidearm
-            MPLoadouts.NetworkLoadouts[msg.lobby_id].loadouts
-                .Where(x => !x.weapons.Contains(WeaponType.REFLEX))
-                .ToList()
-                .ForEach(x => x.weapons.Add(WeaponType.REFLEX));
+            if (!MPWeapons.ReflexEnabled)
+            {
+                // Add free Reflex sidearm
+                MPLoadouts.NetworkLoadouts[msg.lobby_id].loadouts
+                    .Where(x => !x.weapons.Contains(WeaponType.REFLEX))
+                    .ToList()
+                    .ForEach(x => x.weapons.Add(WeaponType.REFLEX));
+            }
         }
 
         private static void OnSetCustomLoadoutMessage(NetworkMessage rawMsg)
@@ -596,7 +601,7 @@ namespace GameMod
             color.a = uie.m_alpha;
             UIManager.DrawQuadBarHorizontal(pos, 11f, 11f, num, color, 8);
             color = ((!highlight) ? UIManager.m_col_ui1 : UIManager.m_col_ui5);
-            UIManager.DrawSpriteUI(pos - Vector2.right * (num * 0.5f + 2f), 0.16f, 0.16f, color, uie.m_alpha, (int)(26 + wt));
+            UIManager.DrawSpriteUI(pos - Vector2.right * (num * 0.5f + 2f), 0.16f, 0.16f, color, uie.m_alpha, MPWeapons.primaries[(int)wt].icon_idx);
             uie.DrawStringSmall(Player.GetWeaponNameNoDefault(wt), pos - Vector2.right * (num * 0.5f - 10f), 0.4f, StringOffset.LEFT, color, 1f, num * 0.95f);
         }
 
@@ -607,7 +612,7 @@ namespace GameMod
             color.a = uie.m_alpha;
             UIManager.DrawQuadBarHorizontal(pos, 11f, 11f, num, color, 8);
             color = ((!highlight) ? UIManager.m_col_ui1 : UIManager.m_col_ui5);
-            UIManager.DrawSpriteUI(pos - Vector2.right * (num * 0.5f + 2f), 0.16f, 0.16f, color, uie.m_alpha, (int)(104 + mt));
+            UIManager.DrawSpriteUI(pos - Vector2.right * (num * 0.5f + 2f), 0.16f, 0.16f, color, uie.m_alpha, MPWeapons.secondaries[(int)mt].icon_idx);
             uie.DrawStringSmall(Player.GetMissileNameNoDefault(mt), pos - Vector2.right * (num * 0.5f - 10f), 0.4f, StringOffset.LEFT, color, 1f, num * 0.95f);
         }
 
@@ -817,16 +822,26 @@ namespace GameMod
         }
     }
 
-    // Disables reflex powerups since it's provided as a standard sidearm now.
+    // Conditionally disables reflex powerups since it's provided as a standard sidearm now sometimes.
     [HarmonyPatch(typeof(MenuManager), "MpMatchSetup")]
     internal class MPLoadouts_MenuManager_MpMatchSetup
     {
         public static void Postfix()
         {
-            if (!Menus.mms_classic_spawns)
+            if (!MPWeapons.ReflexEnabled)
             {
                 MenuManager.mms_powerup_filter[2] = false;
             }
+        }
+    }
+
+    // attempts to help with the bug with ship customization not appearing properly
+    [HarmonyPatch(typeof(LoadoutDataMessage), MethodType.Constructor, new Type[] { typeof(LoadoutDataMessage) })]
+    internal class MPLoadouts_LoadoutDataMessage_Constructor
+    {
+        public static void Postfix(LoadoutDataMessage src, LoadoutDataMessage __instance)
+        {
+            __instance.lobby_id = src.lobby_id;
         }
     }
 }

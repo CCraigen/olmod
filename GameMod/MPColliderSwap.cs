@@ -9,25 +9,24 @@ namespace GameMod
     {
         public static int selectedCollider = 0;
 
-        public static bool visualizeMe = false; // For debugging. Turn this on to render the collider mesh.
-    }
+        public static bool visualizeMe = false; // For debugging. Turn this on to render the collider mesh.\
 
-    // replaces the mesh when the PlayerShip object is started, provided that an accurate mesh has been selected instead of the default
-    [HarmonyPatch(typeof(PlayerShip), "Start")]
-    static class MPColliderSwap_PlayerShip_Start
-    {
-        static void Postfix(PlayerShip __instance)
+        public static void SwapCollider(PlayerShip ps)
         {
             if (!GameplayManager.IsMultiplayer)
                 return;
 
-            if (MPColliderSwap.selectedCollider != 0 && __instance.c_mesh_collider.GetComponent<MeshCollider>() == null)
-            {
-                var mat_no_friction = __instance.c_mesh_collider.sharedMaterial;
-                Object.Destroy(__instance.c_mesh_collider);
-                GameObject go = Object.Instantiate(MPShips.selected.collider[MPColliderSwap.selectedCollider - 1]); // -1 since 0 is the "Stock" sphere
+            Debug.Log("CCF Swapping collider");
 
-                if (MPColliderSwap.visualizeMe && !__instance.c_player.m_spectator && __instance.netId != GameManager.m_local_player.c_player_ship.netId)
+            if (selectedCollider != 0 && ps.c_mesh_collider.GetComponent<MeshCollider>() == null)
+            {
+                var mat_no_friction = ps.c_mesh_collider.sharedMaterial;
+                Object.Destroy(ps.c_mesh_collider);
+                //int id = GameplayManager.IsDedicatedServer() ? __instance.connectionToClient.connectionId : __instance.connectionToServer.connectionId;
+                GameObject go = Object.Instantiate(MPShips.GetShip(ps).collider[selectedCollider - 1]); // -1 since 0 is the "Stock" sphere
+                //GameObject go = Object.Instantiate(MPShips.SelectedShips[id].collider[MPColliderSwap.selectedCollider - 1]); // -1 since 0 is the "Stock" sphere
+
+                if (visualizeMe && !ps.c_player.m_spectator && ps.netId != GameManager.m_local_player.c_player_ship.netId)
                 {
                     MeshRenderer mr = go.AddComponent<MeshRenderer>();
                     mr.sharedMaterial = UIManager.gm.m_energy_material;
@@ -37,14 +36,15 @@ namespace GameMod
                 go.layer = 16;
                 var coll = go.GetComponent<MeshCollider>();
                 coll.sharedMaterial = mat_no_friction;
-                go.AddComponent<PlayerMeshCollider>().c_player = __instance.c_player;
+                go.AddComponent<PlayerMeshCollider>().c_player = ps.c_player;
 
-                __instance.c_mesh_collider = coll;
-                __instance.c_mesh_collider_trans = __instance.c_mesh_collider.transform;
-                __instance.c_flak_range_go.GetComponent<TriggerFlakRange>().player_collider = coll;
+                ps.c_mesh_collider = coll;
+                ps.c_mesh_collider_trans = ps.c_mesh_collider.transform;
+                ps.c_flak_range_go.GetComponent<TriggerFlakRange>().player_collider = coll;
             }
         }
     }
+
 
     // replaces the original "PrepareForMP" method with one that can handle mesh vs. sphere colliders
     [HarmonyPatch(typeof(Player), "PrepareForMP")]
