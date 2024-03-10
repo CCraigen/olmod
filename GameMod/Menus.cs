@@ -172,13 +172,13 @@ namespace GameMod {
                         MPShips.masterscale = 1f;
                         break;
                     case 1:
-                        MPShips.masterscale = 0.9f;
+                        MPShips.masterscale = 0.7f;
                         break;
                     case 2:
-                        MPShips.masterscale = 0.8f;
+                        MPShips.masterscale = 0.5f;
                         break;
                     case 3:
-                        MPShips.masterscale = 0.7f;
+                        MPShips.masterscale = 0.3f;
                         break;
                 }
             }
@@ -412,8 +412,8 @@ namespace GameMod {
 
             // CCF this is getting temporarily hidden to make some menu space. Tobias is cooking up a new menu that should fix this.
 
-            position.y += yOffset;
-            uie.SelectAndDrawStringOptionItem(Loc.LS("ALWAYS CLOAKED"), position, 15, Menus.GetMMSAlwaysCloaked(), Loc.LS("SHIPS ARE ALWAYS CLOAKED"), 1f, false);
+            //position.y += yOffset;
+            //uie.SelectAndDrawStringOptionItem(Loc.LS("ALWAYS CLOAKED"), position, 15, Menus.GetMMSAlwaysCloaked(), Loc.LS("SHIPS ARE ALWAYS CLOAKED"), 1f, false);
             // END HIDE
 
             position.y += yOffset;
@@ -446,9 +446,9 @@ namespace GameMod {
             position.y += yOffset;
             uie.SelectAndDrawStringOptionItem(Loc.LS("CUSTOM SHIPS"), position, 23, Menus.GetMMSShipsAllowed(), Loc.LS("ALLOW PLAYERS TO CHOOSE THEIR SHIP TYPE"), 1f, false);
 
-            // THIS IS NOT READY YET.
-            //position.y += yOffset;
-            //uie.SelectAndDrawStringOptionItem(Loc.LS("SHIP SCALE"), position, 24, Menus.GetMMSShipScale(), Loc.LS("SCALES DOWN ALL SHIPS TO A CERTAIN FACTOR"), 1f, false);
+            // SHIP SCALING - THIS IS NOT READY YET.
+            position.y += yOffset;
+            uie.SelectAndDrawStringOptionItem(Loc.LS("SHIP SCALE"), position, 24, Menus.GetMMSShipScale(), Loc.LS("SCALES DOWN ALL SHIPS TO A CERTAIN FACTOR"), 1f, false);
         }
 
         private static void AdjustAdvancedPositionCenterColumn(ref Vector2 position)

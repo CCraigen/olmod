@@ -381,6 +381,10 @@ namespace GameMod
         // ship scale factor (from Kodachi base of 1f)
         public float shipScale = 1f;
 
+        // actual scale derived form the shipScale and the masterScale once the round is running
+        public float actualScale = 1f;
+        public HamsterballCollider scaledCollider; 
+
         // shield scaling factor -- inversely applied to shield pickups
         public float ShieldMultiplier;
 
@@ -445,7 +449,7 @@ namespace GameMod
             player = ps.c_player;
 
             ps.c_rigidbody.drag *= AccelMulti;
-            Debug.Log("CCF setting drag to " + ps.c_rigidbody.drag);
+            //Debug.Log("CCF setting drag to " + ps.c_rigidbody.drag);
 
             MPColliderSwap.SwapCollider(ps);
             SetScale();
@@ -476,19 +480,33 @@ namespace GameMod
             }
             */
 
-            float sizeScale = shipScale * MPShips.masterscale;
+            actualScale = shipScale * MPShips.masterscale;
+            //Debug.Log("CCF Inertia tensor PRE is " + ps.c_rigidbody.inertiaTensor + " rotation is " + ps.c_rigidbody.inertiaTensorRotation);
 
-            ps.c_main_ship_go.transform.localScale = new Vector3(sizeScale, sizeScale, sizeScale); // only scales visible components, not the level collider. We don't want to squeeze places we shouldn't.
+            Vector3 tensor = ps.c_rigidbody.inertiaTensor; // Handling gets screwy when you set the collider size since Unity auto-computes a new tensor value. We need to restore it.
+            ((SphereCollider)ps.c_level_collider).radius = actualScale * 1.05f;
+            ps.c_rigidbody.inertiaTensor = tensor;
+
+            //Debug.Log("CCF Inertia tensor POST is " + ps.c_rigidbody.inertiaTensor + " rotation is " + ps.c_rigidbody.inertiaTensorRotation);
+
+            //Debug.Log("CCF MainShip name is " + ps.c_main_ship_go.name);
+            ps.c_main_ship_go.transform.localScale = new Vector3(actualScale, actualScale, actualScale); // only scales visible components, not the level collider. We don't want to squeeze places we shouldn't.
             if (GameplayManager.IsMultiplayer)
             {
-                ps.c_mesh_collider_trans.localScale = new Vector3(sizeScale, sizeScale, sizeScale); // however the mesh collider *should* be scaled, and it's not parented to the main ship in multiplayer
+                ps.c_mesh_collider_trans.localScale = new Vector3(actualScale, actualScale, actualScale); // however the mesh collider *should* be scaled, and it's not parented to the main ship in multiplayer
             }
-            ps.c_flak_range_go.transform.localScale = new Vector3(3.333f / sizeScale, 3.333f / sizeScale, 3.333f / sizeScale); // flak rangefinder gets scaled too but shouldn't, its range isn't affected
+            ps.c_flak_range_go.transform.localScale = new Vector3(3.333f / actualScale, 3.333f / actualScale, 3.333f / actualScale); // flak rangefinder gets scaled too but shouldn't, its range isn't affected
 
 
             for (int i = 0; i < 4; i++) // bring down the movement speeds by half of the difference
             {
-                m_slide_force_mp[i] = ((shipScale * m_slide_force_mp_nonscaled[i]) + (sizeScale * m_slide_force_mp_nonscaled[i])) / 2f;
+                m_slide_force_mp[i] = ((shipScale * m_slide_force_mp_nonscaled[i]) + (actualScale * m_slide_force_mp_nonscaled[i])) / 2f;
+            }
+
+            if (/*actualScale != 1f && */GameplayManager.IsDedicatedServer()) // level collider hamster-balling -- only do this on the server, to prevent entering areas you shouldn't be in
+            {
+                Debug.Log("CCF adding hamsterball to " + ps.c_player.m_mp_name);
+                scaledCollider = ps.gameObject.AddComponent<HamsterballCollider>();
             }
         }
 
@@ -531,6 +549,195 @@ namespace GameMod
         public Vector3 c_up;
         public Vector3 c_right;
         public int flak_fire_count;
+    }
+
+    public class HamsterballCollider : MonoBehaviour
+    {
+        const float THRESHBIG = 1.1f;
+        const float THRESHOLD = 1f;
+        
+        const int layerMask = (1 << (int)UnityObjectLayers.LEVEL) | (1 << (int)UnityObjectLayers.LAVA);
+        float MaxDist;
+        float sqrDoubleMaxDist; 
+
+        PlayerShip ps;
+        Transform c_transform;
+        Ship ship;
+        SphereCollider level_collider;
+
+        GameObject hb;
+        Transform h_transform;
+        SphereCollider h_collider;
+
+        ConfigurableJoint joint;
+
+        Collider[] l_colliders = new Collider[32]; // unless you're hitting some weird geometry, this should be more than enough
+
+        private bool temp2 = false;
+        public bool temp
+        {
+            get { return temp2; }
+            set
+            {
+                if (value != temp2)
+                {
+                    Debug.Log("CCF wall collide radius: " + value);
+                }
+                temp2 = value;
+            }
+        }
+
+        public HamsterballCollider()
+        {
+            ps = gameObject.GetComponent<PlayerShip>();
+
+            if (ps == null)
+            {
+                Debug.Log("Hamsterball collider object got attached to a non-ship somehow. Destroying object. Unknown behaviour beyond this point.");
+                Object.Destroy(this);
+                return;
+            }
+            c_transform = ps.c_transform;
+            ship = MPShips.GetShip(ps);
+            level_collider = (SphereCollider)ps.c_level_collider;
+
+            hb = new GameObject("hamsterball");
+            h_transform = hb.transform;
+            hb.layer = 8; // debris layer, collides with level/lava/doors but not players
+            Rigidbody rb = hb.AddComponent<Rigidbody>();
+            h_collider = hb.AddComponent<SphereCollider>();
+
+            rb.mass = 0.01f;
+            rb.drag = 0f;
+            rb.angularDrag = 0f;
+            rb.useGravity = false;
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
+            rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+
+            MaxDist = THRESHBIG - ship.actualScale * 1.05f;
+            sqrDoubleMaxDist = MaxDist * MaxDist * 2;
+
+            h_collider.radius = 1.1f;
+            h_collider.material = level_collider.material;
+            h_transform.position = c_transform.position;
+
+            Debug.Log("CCF shipcollider is scale " + level_collider.transform.lossyScale + " radius " + level_collider.radius);
+            Debug.Log("CCF hamsterball  is scale " + h_transform.lossyScale + " radius " + h_collider.radius);
+
+            //h_transform.rotation = c_transform.rotation;
+
+            /*
+            joint = hb.AddComponent<SpringJoint>();
+            joint.enableCollision = false;
+            joint.breakForce = Mathf.Infinity;
+            joint.connectedBody = ps.c_rigidbody;
+
+            joint.autoConfigureConnectedAnchor = false;
+            joint.anchor = Vector3.zero;
+            joint.connectedAnchor = Vector3.zero;
+
+            joint.damper = 1000f;
+            joint.spring = 1000f;
+            joint.minDistance = 0f;
+            joint.maxDistance = MaxDist;
+            joint.tolerance = 0.01f;
+            */
+
+            joint = hb.AddComponent<ConfigurableJoint>();
+            joint.enableCollision = false;
+            joint.connectedBody = ps.c_rigidbody;
+            joint.autoConfigureConnectedAnchor = false;
+            joint.anchor = Vector3.zero;
+            joint.connectedAnchor = Vector3.zero;
+            joint.axis = new Vector3(1f, 0f, 0f); // I don't think either axis matters for how these are being treated?
+            joint.secondaryAxis = new Vector3(0f, 1f, 0f);
+            
+            joint.xMotion = ConfigurableJointMotion.Limited;
+            joint.yMotion = ConfigurableJointMotion.Limited;
+            joint.zMotion = ConfigurableJointMotion.Limited;
+            joint.linearLimit = new SoftJointLimit { limit = MaxDist * 2 };
+
+            joint.angularXMotion = ConfigurableJointMotion.Free;
+            joint.angularYMotion = ConfigurableJointMotion.Free;
+            joint.angularZMotion = ConfigurableJointMotion.Free;
+
+            joint.breakForce = Mathf.Infinity;
+            joint.breakTorque = Mathf.Infinity;
+
+            joint.enablePreprocessing = false;
+        }
+
+        public void FixedUpdate()
+        {
+            /*if (!h_collider.enabled)
+            {
+                h_transform.position = c_transform.position;
+            }*/
+
+            bool h_enabled = h_collider.enabled;
+            bool l_enabled = level_collider.enabled;
+
+            if (l_enabled != h_enabled)
+            {
+                h_enabled = l_enabled;
+                Debug.Log("CCF " + ps.c_player.m_mp_name + "'s hamsterball is enabled: " + h_enabled);
+                h_collider.enabled = h_enabled;
+            }
+
+            // check if we're way-desynced and re-align the colliders
+            if (h_enabled && (c_transform.position - h_transform.position).sqrMagnitude > sqrDoubleMaxDist)
+            {
+                h_transform.position = c_transform.position; // this may cause some bumpage but it also shouldn't happen very often
+                Debug.Log("CCF " + ps.c_player.m_mp_name + "'s hamsterball has been re-synced");
+            }
+
+            // sync the hamsterball with the ship before starting
+            //h_transform.rotation = c_transform.rotation;
+            //h_transform.position = c_transform.position;
+
+            // check for level geometry around the ship
+
+            /*
+            int numhits = Physics.OverlapSphereNonAlloc(c_transform.position, 1.05f, l_colliders, layerMask, QueryTriggerInteraction.Ignore);
+            Collider c;
+            Vector3 direction;
+            float distance;
+
+            // figure out where to move the hamsterball (hopefully preemtively)
+            //h_collider.radius = 1.05f;
+
+            if (numhits == 0)
+            {
+                h_transform.position = c_transform.position;
+            }
+
+            for (int i = 0; i < numhits; i++)
+            {
+                c = l_colliders[i];
+                Physics.ComputePenetration(h_collider, h_transform.position, h_transform.rotation, c, c.transform.position, c.transform.rotation, out direction, out distance);
+                h_transform.position += direction * distance; //* 1.05f;
+            }
+            
+            if (Vector3.SqrMagnitude(h_transform.position - c_transform.position) > sqrMaxDist) // we've crossed the threshold for how far the ship center and hamsterball center can go
+            {
+                c_transform.position = Vector3.MoveTowards(h_transform.position, c_transform.position, THRESHOLD);
+            }
+            */
+            //h_collider.radius = 1.05f;
+        }
+
+        /*
+        public void OnCollisionEnter(Collision coll) // THIS IS THE WRONG OBJECT -- IT NEEDS TO BE ON A MONOBEHAVIOUR ATTACHED TO THE HAMSTERBALL
+        {
+            Debug.Log("CCF Hamsterball hit something: " + coll.collider.name);
+            ps.CallRpcPlayInvulHitAudio(50f);
+        }
+        */
+
+        public void OnDestroy()
+        {
+            Object.Destroy(hb);
+        }
     }
 
 
@@ -655,7 +862,7 @@ namespace GameMod
         static void Postfix(PlayerShip ___c_player_ship)
         {
             ___c_player_ship.c_rigidbody.drag *= MPShips.GetShip(___c_player_ship).AccelMulti;
-            Debug.Log("CCF Restoring drag to " + ___c_player_ship.c_rigidbody.drag);
+            //Debug.Log("CCF Restoring drag to " + ___c_player_ship.c_rigidbody.drag);
         }
     }
 
