@@ -29,15 +29,18 @@ namespace GameMod
 
         public static void ResetForNewLevel()
         {
-            //Debug.Log("CCF resetting in MPSpawnExtension");
+            Debug.Log("CCF resetting in MPSpawnExtension");
             spawnpoints.Clear();
             DownloadChecked = false;
         }
 
         public static void CheckExtraSpawnpoints(string name)
         {
-            if (!GameplayManager.IsMultiplayer || DownloadChecked)
+            Debug.Log("CCF spawnpoint code checks -- IsMultiplayer = " + GameplayManager.IsMultiplayer + " or DownloadChecked = " + DownloadChecked + " or IsDedicatedServer = " + GameplayManager.IsDedicatedServer());
+
+            if (DownloadChecked || !(GameplayManager.IsDedicatedServer() || GameplayManager.IsMultiplayer))
             {
+                Debug.Log("CCF bailing out of spawnpoint code");
                 return;
             }
 
@@ -64,7 +67,7 @@ namespace GameMod
         {
             DownloadBusy = true; // piggybacking off of the download code delay
 
-            //Debug.Log("CCF requesting url " + BASE_URL + $"{name}-spawnpoints.json");
+            Debug.Log("CCF requesting url " + BASE_URL + $"{name}-spawnpoints.json");
 
             UnityWebRequest www = UnityWebRequest.Get(BASE_URL + $"{name}-spawnpoints.json");
             www.timeout = 3;
@@ -95,7 +98,7 @@ namespace GameMod
 
         public static void LoadExtraSpawnpoints(LevelData ld)
         {
-            //Debug.Log("CCF additional spawn count: " + spawnpoints.Count);
+            Debug.Log("CCF additional spawn count in LoadExtraSpawnpoints: " + spawnpoints.Count);
             if (spawnpoints.Count != 0)
             {
                 LevelData.SpawnPoint[] NewSpawnPoints = ld.m_player_spawn_points.Concat(spawnpoints).ToArray();

@@ -232,6 +232,7 @@ namespace GameMod
         {
             while (MPDownloadLevel.DownloadBusy || MPSpawnExtension.DownloadBusy)
                 yield return null;
+            Debug.Log("CCF Waitlevel check name: " + name.Contains(":") + " -- nodownload: " + Config.NoDownload + " -- hashcheck " + (GameManager.MultiplayerMission.FindAddOnLevelNumByIdStringHash(name) >= 0));
             if (!name.Contains(":") || Config.NoDownload || GameManager.MultiplayerMission.FindAddOnLevelNumByIdStringHash(name) >= 0) // test here to prevent loop
             {
                 Debug.Log("Level downloaded, loading scene");
@@ -257,7 +258,7 @@ namespace GameMod
 
             if (MPDownloadLevel.DownloadBusy || MPSpawnExtension.DownloadBusy)
             {
-                //Debug.Log("Level still downloading when loading match scene, delay scene load " + name);
+                Debug.Log("Level still downloading when loading match scene, delay scene load " + name);
                 GameManager.m_gm.StartCoroutine(WaitLevel(name));
                 return false;
             }
