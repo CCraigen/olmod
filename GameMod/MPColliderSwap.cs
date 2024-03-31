@@ -9,7 +9,7 @@ namespace GameMod
     {
         public static int selectedCollider = 0;
 
-        public static bool visualizeMe = false; // For debugging. Turn this on to render the collider mesh.
+        public static bool visualizeMe = true; // For debugging. Turn this on to render the collider mesh.
     }
 
     // replaces the mesh when the PlayerShip object is started, provided that an accurate mesh has been selected instead of the default

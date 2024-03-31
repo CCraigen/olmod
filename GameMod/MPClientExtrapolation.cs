@@ -487,17 +487,20 @@ namespace GameMod {
             player.c_player_ship.c_mesh_collider_trans.localRotation = player.c_player_ship.c_transform.localRotation;
         }
 
-        public static void extrapolatePlayer(Player player, NewPlayerSnapshot snapshot, float t){
-            if (HandlePlayerRespawn(player,snapshot)) {
+        public static void extrapolatePlayer(Player player, NewPlayerSnapshot A, NewPlayerSnapshot B, float t){
+            if (HandlePlayerRespawn(player,B)) {
                 return;
             }
-            Vector3 newPos = Vector3.LerpUnclamped(snapshot.m_pos, snapshot.m_pos+snapshot.m_vel, t);
+            //Vector3 newPos = Vector3.LerpUnclamped(snapshot.m_pos, snapshot.m_pos+snapshot.m_vel, t);
+            Vector3 newCollPos = Vector3.LerpUnclamped(B.m_pos, B.m_pos + B.m_vel, t);
+            Vector3 newPos = B.m_pos + 0.25f * t * (3 * B.m_vel - A.m_vel); // pos = old + v*t + 1/2 * a * t^2  -- except all simplified and rearranged (0.125f * t instead of 0.5f * t because it's 4 frames worth)
+
             // limit ship dive-in if enabled:
             if (Menus.mms_lag_compensation_collision_limit > 0) {
                 const float radius = 0.98f; /// the ship's collider is radius 1, we use a bit smaller one
                 // how far the ship's enclosing sphere is allowed to dive in
                 float maxDive = (100.0f - (float)Menus.mms_lag_compensation_collision_limit)/50.0f * radius;
-                Vector3 basePos = snapshot.m_pos;
+                Vector3 basePos = B.m_pos;
                 Vector3 deltaPos = newPos - basePos;
                 float dist = deltaPos.magnitude;
                 if (dist > 0.05f && dist > maxDive) { // only if ship is moved by a significant amount
@@ -524,10 +527,13 @@ namespace GameMod {
                     }
                 }
             }
-            player.c_player_ship.c_transform.localPosition = newPos;
-            player.c_player_ship.c_transform.rotation = Quaternion.SlerpUnclamped(snapshot.m_rot, snapshot.m_rot*Quaternion.Euler(snapshot.m_vrot), t);
+            //player.c_player_ship.c_transform.localPosition = newPos;
+            player.c_player_ship.c_transform.localPosition = newCollPos;
+            player.c_player_ship.c_transform.rotation = Quaternion.SlerpUnclamped(B.m_rot, B.m_rot*Quaternion.Euler(B.m_vrot), t);
             player.c_player_ship.c_mesh_collider_trans.localPosition = player.c_player_ship.c_transform.localPosition;
             player.c_player_ship.c_mesh_collider_trans.localRotation = player.c_player_ship.c_transform.localRotation;
+
+            //player.c_player_ship.c_mesh_collider_trans.localPosition = newCollPos;
         }
 
         // Called per frame, moves ships along their interpolation/extrapolation motions
@@ -597,8 +603,8 @@ namespace GameMod {
                     }
                 } else {
                     // extrapolation case
-                    // use the most recently received snapshot
-                    msgB = m_last_messages_ring[m_last_messages_ring_pos_last];
+                    msgA = m_last_messages_ring[(m_last_messages_ring_pos_last - 2) & 3]; // 2 snapshots back
+                    msgB = m_last_messages_ring[m_last_messages_ring_pos_last]; // the most recently received snapshot
                 }
             } // lock
             m_last_frame_time = now;
@@ -643,17 +649,21 @@ namespace GameMod {
             {
                 if (player != null && !player.isLocalPlayer && !player.m_spectator)
                 {
+                    NewPlayerSnapshot A = GetPlayerSnapshot(msgA, player);
+                    NewPlayerSnapshot B = GetPlayerSnapshot(msgB, player);
+
                     // do the actual interpolation or extrapolation, as calculated above
-                    if (do_interpolation) {
-                        NewPlayerSnapshot A = GetPlayerSnapshot(msgA, player);
-                        NewPlayerSnapshot B = GetPlayerSnapshot(msgB, player);
-                        if(A != null && B != null){
+                    if (do_interpolation)
+                    {
+                        if (A != null && B != null)
+                        {
                             interpolatePlayer(player, A, B, interpolate_factor);
                         }
                     } else {
-                        NewPlayerSnapshot snapshot = GetPlayerSnapshot(msgB, player);
-                        if(snapshot != null){
-                            extrapolatePlayer(player, snapshot, delta_t);
+                        //NewPlayerSnapshot snapshot = GetPlayerSnapshot(msgB, player);
+                        if (A != null && B != null)
+                        {
+                            extrapolatePlayer(player, A, B, delta_t);
                         }
                     }
                 }
