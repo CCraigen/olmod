@@ -160,7 +160,7 @@ namespace GameMod {
     {
         private static void Postfix()
         {
-            if (!GameplayManager.IsDedicatedServer())
+            if (MPDownloadLevel.DownloadBusy || MPSpawnExtension.DownloadBusy || !GameplayManager.IsDedicatedServer())
                 return;
             Debug.Log("MPTweaksLoadScene");
             RobotManager.ReadMultiplayerModeFile();
@@ -286,7 +286,7 @@ namespace GameMod {
             caps.Add("ModVersion", OlmodVersion.FullVersionString);
             caps.Add("Modded", Core.GameMod.Modded ? "1" : "0");
             caps.Add("ModsLoaded", Core.GameMod.ModsLoaded);
-            caps.Add("SupportsTweaks", "changeteam,deathreview,sniper,jip,nocompress_0_3_6,customloadouts,damagenumbers,ctfjoin" + (MPAudioTaunts.AClient.active ? ",audiotaunts":""));
+            caps.Add("SupportsTweaks", "changeteam,deathreview,sniper,jip,nocompress_0_3_6,customloadouts,damagenumbers,ctfjoin,efirepacket" + (MPAudioTaunts.AClient.active ? ",audiotaunts":""));
             caps.Add("ModPrivateData", "1");
             caps.Add("ClassicWeaponSpawns", "1");
             caps.Add("NetVersion", MPTweaks.NET_VERSION.ToString());
