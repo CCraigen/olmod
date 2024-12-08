@@ -78,13 +78,20 @@ namespace GameMod
                 {
                     foreach (Graph.DecayStructure cur in Graph.data_graphs)
                     {
-                        if (cur.name == "Frametime")
+                        /*if (cur.name == "Frametime")
                         {
                             cur.AddElement(new float[] { FixFPSCalculation.currentFrameTime });
                             //uConsole.Log("Adding element: " + UIElement.average_fps+"   size:"+cur.size+"  limit:"+cur.element_limit);
-                        }
+                        }*/
                         if (MPSkipClientResimulation.data_available)
                         {
+                            // temp hijacking
+                            if (cur.name == "Frametime")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.report_time });
+                                //cur.AddElement(new float[] { MPServerOptimization.current.rot_dir.sqrMagnitude });
+                            }
+                            
                             if (cur.name == "PosCorrect")
                             {
                                 cur.AddElement(new float[] { MPSkipClientResimulation.err_distsqr });
@@ -133,10 +140,72 @@ namespace GameMod
                             {
                                 cur.AddElement(new float[] { MPSkipClientResimulation.turnvec });
                             }
+                            if (cur.name == "SErrPos")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.errsmooth_pos });
+                            }
+                            if (cur.name == "SErrRot")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.errsmooth_rot });
+                            }
+
+                            if (cur.name == "StatesReceived")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.num_states_received });
+                            }
+
+                            if (cur.name == "TickAckGap")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.tick_ack_gap });
+                            }
+                        }
+                        if (MPSkipClientResimulation.overage_available)
+                        {
+                            if (cur.name == "XOverage")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.xoverage });
+                            }
+                            if (cur.name == "YOverage")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.yoverage });
+                            }
+                            if (cur.name == "RotationX")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.xrotation });
+                            }
+                            if (cur.name == "RotationY")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.yrotation });
+                            }
+                            if (cur.name == "MouseX")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.mouseX });
+                            }
+                            if (cur.name == "MouseY")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.mouseY });
+                            }
+                            if (cur.name == "MouseXRaw")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.mouseXraw });
+                            }
+                            if (cur.name == "MouseYRaw")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.mouseYraw });
+                            }
+                        }
+                        if (MPSkipClientResimulation.tick_diff_available)
+                        {
+                            if (cur.name == "TickDiffAck")
+                            {
+                                cur.AddElement(new float[] { MPSkipClientResimulation.tick_diff_ack });
+                            }
                         }
                     }
                 }
                 MPSkipClientResimulation.data_available = false;
+                MPSkipClientResimulation.overage_available = false;
+                MPSkipClientResimulation.tick_diff_available = false;
 
                 foreach (Graph gr in graphs)
                 {
@@ -149,9 +218,9 @@ namespace GameMod
         }
 
         [HarmonyPatch(typeof(GameManager), "Start")]
-        internal class GraphManager_GameManager_Start
+        public static class GraphManager_GameManager_Start
         {
-            private static void Postfix(GameManager __instance)
+            public static void Postfix(GameManager __instance)
             {
                 uConsole.RegisterCommand("ccgraphs", "creates CCFireball's graph presets", new uConsole.DebugCommand(CmdCreateGraphsCC));
 
@@ -180,43 +249,102 @@ namespace GameMod
                 uConsole.RegisterCommand("gdcolor", "sets the color for the current decaystructure", new uConsole.DebugCommand(CmdSetColor));
                 uConsole.RegisterCommand("gdname", "sets the name for the current decaystructure", new uConsole.DebugCommand(CmdSetName));
 
+                uConsole.RegisterCommand("players", "lists off all players in order, according to the client", new uConsole.DebugCommand(CmdPlayers));
+
+                uConsole.RegisterCommand("maxqueue", "sets the QualitySettings.maxQueuedFrames amount (default 2)", new uConsole.DebugCommand(CmdSetMaxQueuedFrames));
+
                 // debug commands
                 // uConsole.RegisterCommand("genline", "", new uConsole.DebugCommand(CmdLine));
                 // uConsole.RegisterCommand("gencurve", "", new uConsole.DebugCommand(CmdCurve));
             }
 
-            private static void CmdCreateGraphsCC()
+            private static void CmdPlayers()
             {
-                Graph g1 = new Graph(new Vector2(-445f, 333f), 100, 45, "Frametime");
-                Graph g2 = new Graph(new Vector2(-80f, 345f), 125, 45, "PosCorrect");
-                Graph g3 = new Graph(new Vector2(80f, 345f), 125, 45, "RotCorrect");
-                Graph g4 = new Graph(new Vector2(445f, 333f), 100, 45, "TickDiff");
+                Debug.Log("-------------------------------");
+                Debug.Log("CCF Player order is:");
+                Debug.Log("-------------------------------");
+
+                int x = 0;
+                foreach (Player p in NetworkManager.m_Players)
+                {
+                    Debug.Log(x + " - " + p.m_mp_name);
+                    x++;
+                }
+
+                Debug.Log("-------------------------------");
+            }
+
+            private static void CmdSetMaxQueuedFrames()
+            {
+                QualitySettings.maxQueuedFrames = uConsole.GetInt();
+                MPSkipClientResimulation.maxQueued = QualitySettings.maxQueuedFrames;
+                Debug.Log("-------------------------------");
+                Debug.Log("CCF QualitySettings.maxQueuedFrames set to " + MPSkipClientResimulation.maxQueued);
+                Debug.Log("-------------------------------");
+            }
+
+            public static void CmdCreateGraphsCC()
+            {
+                if (MPServerOptimization.gaugesOn)
+                    return;
+
+                //QualitySettings.maxQueuedFrames = 1;
+                //MPSkipClientResimulation.maxQueued = QualitySettings.maxQueuedFrames;
+                //Debug.Log("CCF - QualitySettings.maxQueuedFrames " + MPSkipClientResimulation.maxQueued);
+
+                Graph g1 = new Graph(new Vector2(-445f, 333f), 100, 45, "Frametime"); // shown
+                //Graph g2 = new Graph(new Vector2(-80f, 345f), 125, 45, "PosCorrect");
+                //Graph g3 = new Graph(new Vector2(80f, 345f), 125, 45, "RotCorrect");
+                Graph g2 = new Graph(new Vector2(-80f, 345f), 125, 45, "ErrCorrect");
+                Graph g4 = new Graph(new Vector2(445f, 333f), 100, 45, "TickDiff"); // shown
                 Graph g5 = new Graph(new Vector2(210f, 250f), 100, 45, "PosInterp");
                 Graph g6 = new Graph(new Vector2(330f, 250f), 100, 45, "RotInterp");
-                Graph g7 = new Graph(new Vector2(210f, 340f), 100, 45, "ResimDepth");
+                Graph g7 = new Graph(new Vector2(330f, 340f), 100, 45, "ResimDepth"); // shown
+                //Graph g7 = new Graph(new Vector2(210f, 340f), 100, 45, "ResimDepth");
                 //Graph g8 = new Graph(new Vector2(330f, 340f), 100, 45, "UpdInterval");
                 Graph g8 = new Graph(new Vector2(-445f, 333f), 100, 45, "UpdInterval");
                 Graph g9 = new Graph(new Vector2(210f, 250f), 100, 45, "VelDiff");
                 Graph g10 = new Graph(new Vector2(330f, 250f), 100, 45, "AngDiff");
                 Graph g11 = new Graph(new Vector2(210f, 250f), 100, 45, "MoveVec");
                 Graph g12 = new Graph(new Vector2(330f, 250f), 100, 45, "TurnVec");
+                Graph g13 = new Graph(new Vector2(80f, 345f), 125, 45, "SErrPos"); // NOT shown
+                Graph g14 = new Graph(new Vector2(-80f, 345f), 125, 45, "SErrRot"); // NOT shown
+                Graph g15 = new Graph(new Vector2(-80f, 345f), 125, 45, "Overage"); // NOT shown
+                Graph g16 = new Graph(new Vector2(80f, 345f), 125, 45, "Rotation"); // shown
+                Graph g17 = new Graph(new Vector2(330f, 250f), 100, 45, "TickAckGap"); // shown
+                Graph g18 = new Graph(new Vector2(80f, 345f), 125, 45, "MouseX"); // NOT shown
+                Graph g19 = new Graph(new Vector2(-80f, 345f), 125, 45, "MouseY"); // NOT shown
 
                 g1.data_show[0] = true;
                 g2.data_show[1] = true;
-                g3.data_show[2] = true;
-                g4.data_show[3] = true;
+                g2.data_show[2] = true;
+                //g3.data_show[2] = true;
+                g4.data_show[3] = true; // TickDiff
+                g4.data_show[19] = true; // also shows the tick_diff_ack
                 g5.data_show[4] = true;
                 g6.data_show[5] = true;
-                g7.data_show[6] = true;
+                g7.data_show[6] = true; // Resim
+                g7.data_show[18] = true; // also shows the number of received states
                 g8.data_show[7] = true;
                 g9.data_show[8] = true;
                 g10.data_show[9] = true;
                 g11.data_show[10] = true;
                 g12.data_show[11] = true;
+                g13.data_show[12] = true;
+                g14.data_show[13] = true;
+                g15.data_show[14] = true; // shows both rotation amounts
+                g15.data_show[15] = true;
+                g16.data_show[16] = true; // shows both overage mouse amounts
+                g16.data_show[17] = true;
+                g17.data_show[20] = true;
+                //g18.data_show[21] = true; // shows X and XRaw
+                //g18.data_show[22] = true;
+                //g19.data_show[23] = true; // shows Y and YRaw
+                //g19.data_show[24] = true;
 
                 graphs.Add(g1);
                 graphs.Add(g2);
-                graphs.Add(g3);
+                //graphs.Add(g3);
                 graphs.Add(g4);
                 graphs.Add(g5);
                 graphs.Add(g6);
@@ -226,16 +354,37 @@ namespace GameMod
                 graphs.Add(g10);
                 graphs.Add(g11);
                 graphs.Add(g12);
+                graphs.Add(g13);
+                graphs.Add(g14);
+                graphs.Add(g15);
+                graphs.Add(g16);
+                graphs.Add(g17);
+                graphs.Add(g18);
+                graphs.Add(g19);
+                //graphs.Add(g18);
 
-                g1.visible = false; // # of active graphs getting too much
+                //g1.visible = false; // # of active graphs getting too much
+                //g2.visible = false;
+                //g3.visible = false;
                 g5.visible = false; // interesting, but not super useful
                 g6.visible = false; // interesting, but not super useful
-                //g9.visible = false;
-                //g10.visible = false;
+                g8.visible = false;
+                g9.visible = false; 
+                g10.visible = false;
                 g11.visible = false;
                 g12.visible = false;
+                g13.visible = false;
+                g14.visible = false;
+                g15.visible = false;
+                //g16.visible = false;
+                g18.visible = false;
+                g19.visible = false;
+
+                // currently showing g1, g4, g7, g15, g16
 
                 g = g1;
+
+                MPServerOptimization.gaugesOn = true;
             }
 
             private static void CmdCreateGraphInstance()
@@ -426,65 +575,142 @@ namespace GameMod
 
         static Graph()
         {
-            data_graphs.Add(new DecayStructure(1000));
+            // 0
+            data_graphs.Add(new DecayStructure(700));
+            //data_graphs.Add(new DecayStructure(1400));
             data_graphs[data_graphs.Count - 1].name = "Frametime";
             data_graphs[data_graphs.Count - 1].draw_x = -1;
             data_graphs[data_graphs.Count - 1].draw_y = 0;
-
-            data_graphs.Add(new DecayStructure(1000));
+            // 1
+            data_graphs.Add(new DecayStructure(700));
             data_graphs[data_graphs.Count - 1].name = "PosCorrect";
             data_graphs[data_graphs.Count - 1].draw_x = -1;
             data_graphs[data_graphs.Count - 1].draw_y = 0;
-
-            data_graphs.Add(new DecayStructure(1000));
+            // 2
+            data_graphs.Add(new DecayStructure(700));
             data_graphs[data_graphs.Count - 1].name = "RotCorrect";
             data_graphs[data_graphs.Count - 1].draw_x = -1;
             data_graphs[data_graphs.Count - 1].draw_y = 0;
-
-            data_graphs.Add(new DecayStructure(1000));
+            data_graphs[data_graphs.Count - 1].color = 11534501; // pink
+            // 3
+            data_graphs.Add(new DecayStructure(700));
             data_graphs[data_graphs.Count - 1].name = "TickDiff";
             data_graphs[data_graphs.Count - 1].draw_x = -1;
             data_graphs[data_graphs.Count - 1].draw_y = 0;
-
-            data_graphs.Add(new DecayStructure(1000));
+            // 4
+            data_graphs.Add(new DecayStructure(700));
             data_graphs[data_graphs.Count - 1].name = "PosInterp";
             data_graphs[data_graphs.Count - 1].draw_x = -1;
             data_graphs[data_graphs.Count - 1].draw_y = 0;
-
-            data_graphs.Add(new DecayStructure(1000));
+            // 5
+            data_graphs.Add(new DecayStructure(700));
             data_graphs[data_graphs.Count - 1].name = "RotInterp";
             data_graphs[data_graphs.Count - 1].draw_x = -1;
             data_graphs[data_graphs.Count - 1].draw_y = 0;
-
-            data_graphs.Add(new DecayStructure(1000));
+            // 6
+            data_graphs.Add(new DecayStructure(700));
             data_graphs[data_graphs.Count - 1].name = "ResimDepth";
             data_graphs[data_graphs.Count - 1].draw_x = -1;
             data_graphs[data_graphs.Count - 1].draw_y = 0;
-
-            data_graphs.Add(new DecayStructure(1000));
+            // 7
+            data_graphs.Add(new DecayStructure(700));
             data_graphs[data_graphs.Count - 1].name = "UpdInterval";
             data_graphs[data_graphs.Count - 1].draw_x = -1;
             data_graphs[data_graphs.Count - 1].draw_y = 0;
-
-            data_graphs.Add(new DecayStructure(1000));
+            // 8
+            data_graphs.Add(new DecayStructure(700));
             data_graphs[data_graphs.Count - 1].name = "VelDiff";
             data_graphs[data_graphs.Count - 1].draw_x = -1;
             data_graphs[data_graphs.Count - 1].draw_y = 0;
-
-            data_graphs.Add(new DecayStructure(1000));
+            // 9
+            data_graphs.Add(new DecayStructure(700));
             data_graphs[data_graphs.Count - 1].name = "AngDiff";
             data_graphs[data_graphs.Count - 1].draw_x = -1;
             data_graphs[data_graphs.Count - 1].draw_y = 0;
-
-            data_graphs.Add(new DecayStructure(1000));
+            // 10
+            data_graphs.Add(new DecayStructure(700));
             data_graphs[data_graphs.Count - 1].name = "MoveVec";
             data_graphs[data_graphs.Count - 1].draw_x = -1;
             data_graphs[data_graphs.Count - 1].draw_y = 0;
-
-            data_graphs.Add(new DecayStructure(1000));
+            // 11
+            data_graphs.Add(new DecayStructure(700));
             data_graphs[data_graphs.Count - 1].name = "TurnVec";
             data_graphs[data_graphs.Count - 1].draw_x = -1;
             data_graphs[data_graphs.Count - 1].draw_y = 0;
+            // 12
+            data_graphs.Add(new DecayStructure(700));
+            data_graphs[data_graphs.Count - 1].name = "SErrPos";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+            // 13
+            data_graphs.Add(new DecayStructure(700));
+            data_graphs[data_graphs.Count - 1].name = "SErrRot";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+            //data_graphs[data_graphs.Count - 1].color = 16736501; // hot pink
+            // 14
+            data_graphs.Add(new DecayStructure(700));
+            data_graphs[data_graphs.Count - 1].name = "XOverage";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+            // 15
+            data_graphs.Add(new DecayStructure(700));
+            data_graphs[data_graphs.Count - 1].name = "YOverage";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+            data_graphs[data_graphs.Count - 1].color = 11534501; // pink
+            //data_graphs[data_graphs.Count - 1].color = 16736501; // hot pink
+            // 16
+            data_graphs.Add(new DecayStructure(700));
+            data_graphs[data_graphs.Count - 1].name = "RotationX";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+            // 17
+            data_graphs.Add(new DecayStructure(700));
+            data_graphs[data_graphs.Count - 1].name = "RotationY";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+            data_graphs[data_graphs.Count - 1].color = 11534501; // pink
+            // 18
+            data_graphs.Add(new DecayStructure(700));
+            data_graphs[data_graphs.Count - 1].name = "StatesReceived";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+            data_graphs[data_graphs.Count - 1].color = 11534501; // pink
+            // 19
+            data_graphs.Add(new DecayStructure(700));
+            data_graphs[data_graphs.Count - 1].name = "TickDiffAck";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+            data_graphs[data_graphs.Count - 1].color = 11534501; // pink
+            // 20
+            data_graphs.Add(new DecayStructure(700));
+            data_graphs[data_graphs.Count - 1].name = "TickAckGap";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+            //data_graphs[data_graphs.Count - 1].color = 11534501; // pink
+            // 21
+            data_graphs.Add(new DecayStructure(700));
+            data_graphs[data_graphs.Count - 1].name = "MouseX";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+            // 22
+            data_graphs.Add(new DecayStructure(700));
+            data_graphs[data_graphs.Count - 1].name = "MouseXRaw";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+            data_graphs[data_graphs.Count - 1].color = 11534501; // pink
+            // 23
+            data_graphs.Add(new DecayStructure(700));
+            data_graphs[data_graphs.Count - 1].name = "MouseY";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+            // 24
+            data_graphs.Add(new DecayStructure(700));
+            data_graphs[data_graphs.Count - 1].name = "MouseYRaw";
+            data_graphs[data_graphs.Count - 1].draw_x = -1;
+            data_graphs[data_graphs.Count - 1].draw_y = 0;
+            data_graphs[data_graphs.Count - 1].color = 11534501; // pink
 
             uConsole.Log("GRAPHING - " + data_graphs.Count + " DataGraphs initialized");
         }
@@ -594,6 +820,8 @@ namespace GameMod
                 DrawStatsAxes(instance, origin, xrange, yrange);
                 // figure out the maximum bounds for all graphs
                 int index = 0;
+
+                //float local_max_y = -1f;
                 foreach (DecayStructure curr in data_graphs)
                 {
                     if (data_show[index])
@@ -603,10 +831,13 @@ namespace GameMod
                         if (cur_x > max_x) max_x = cur_x;
                         if (cur_y > max_y) max_y = cur_y;
 
-                        DrawDecayStructureToGraph(curr, origin, instance);
+                        DrawDecayStructureToGraph(curr, origin, instance, max_y);
                     }
                     index++;
                 }
+
+                instance.DrawStringSmall("Max: " + max_y, origin, 0.4f, StringOffset.CENTER, UIManager.m_col_ui0, 1f, -1f);
+                max_y = 0f;
                 /*
                 // draw all graphs that are marked to be shown
                 foreach (DecayStructure curr in data_graphs)
@@ -656,8 +887,9 @@ namespace GameMod
             __instance.DrawStringSmall(name, zero, 0.3f, StringOffset.CENTER, UIManager.m_col_ui0, 1f, -1f);
         }
 
-        public void DrawDecayStructureToGraph(DecayStructure ds, Vector2 initial_pos, UIElement instance)
+        public void DrawDecayStructureToGraph(DecayStructure ds, Vector2 initial_pos, UIElement instance, float local_max_y)
         {
+            //float local_max_y = -1f;
             if (ds.size > 0)
             {
                 Color color = new Color((ds.color >> 16) / 255f, ((ds.color >> 8) & 0xff) / 255f, (ds.color & 0xff) / 255f);
@@ -666,7 +898,8 @@ namespace GameMod
                 {
                     local_max_x = ds.findMaximumForIndex(ds.draw_x);
                 }
-                float local_max_y = ds.findMaximumForIndex(ds.draw_y);
+                // local_max_y = ds.findMaximumForIndex(ds.draw_y);
+                // float local_max_y = ds.findMaximumForIndex(ds.draw_y);
                 float resolution = -1;
                 if (ds.draw_x == -1)
                 {
@@ -698,8 +931,10 @@ namespace GameMod
                     start = end;
                 }
 
-                instance.DrawStringSmall("Max: " + local_max_y, initial_pos, 0.4f, StringOffset.CENTER, UIManager.m_col_ui0, 1f, -1f);
+                //instance.DrawStringSmall("Max: " + local_max_y, initial_pos, 0.4f, StringOffset.CENTER, UIManager.m_col_ui0, 1f, -1f);
+                //instance.DrawStringSmall("Max: " + local_max_y, initial_pos, 0.4f, StringOffset.CENTER, Color.(ds.color), 1f, -1f);
             }
+            //return local_max_y;
         }
     }
 }

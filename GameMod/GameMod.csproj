@@ -101,6 +101,8 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ReversePatches.cs" />
+    <Compile Include="MPServerOptimization.cs" />
     <Compile Include="DiagGraph.cs" />
     <Compile Include="AddOnLevelSort.cs" />
     <Compile Include="AmbientUnload.cs" />

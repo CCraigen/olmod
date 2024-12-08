@@ -444,10 +444,27 @@ namespace GameMod
                                 m_type = PlayerSyncResourceMessage.ValueType.ENERGY,
                                 m_value = player.m_energy
                             });
+                            GameplayManager.AddHUDMessage(Loc.LS("ENERGY INCREASED TO") + " " + ((uint)player.m_energy).ToString(), -1, true);
+
+                            // handle boost recharge for energy pickups
+                            if (MPServerOptimization.enabled)
+                            {
+                                player.c_player_ship.m_boost_heat = Mathf.Max(0f, player.c_player_ship.m_boost_heat - 0.5f);
+                                player.c_player_ship.m_boost_overheat_timer = Mathf.Max(0f, player.c_player_ship.m_boost_overheat_timer - 0.5f);
+                            }
                         }
-                        if (player.isLocalPlayer)
+                        /*if (player.isLocalPlayer)
                         {
                             GameplayManager.AddHUDMessage(Loc.LS("ENERGY INCREASED TO") + " " + ((uint)player.m_energy).ToString(), -1, true);
+                        }*/
+                    }
+                    else
+                    {
+                        // handle boost recharge for energy centers
+                        if (MPServerOptimization.enabled)
+                        {
+                            player.c_player_ship.m_boost_heat = Mathf.Max(0f, player.c_player_ship.m_boost_heat - 0.2f); // 0.1f in stock, 0.2f in the MPSoundExt patch, and this should match that.
+                            player.c_player_ship.m_boost_overheat_timer = Mathf.Max(0f, player.c_player_ship.m_boost_overheat_timer - 0.2f); // same
                         }
                     }
                     break;

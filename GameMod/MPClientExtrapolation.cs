@@ -442,14 +442,16 @@ namespace GameMod {
             }
         }
 
-        static private MethodInfo _Client_GetPlayerFromNetId_Method = AccessTools.Method(typeof(Client), "GetPlayerFromNetId");
+        // CCF attempting to consolidate the private network calls to use non-Reflection methods
+        //static private MethodInfo _Client_GetPlayerFromNetId_Method = AccessTools.Method(typeof(Client), "GetPlayerFromNetId");
 
         public static NewPlayerSnapshot GetPlayerSnapshot(NewPlayerSnapshotToClientMessage msg, Player p)
         {
             for (int i = 0; i < msg.m_num_snapshots; i++)
             {
                 NewPlayerSnapshot playerSnapshot = msg.m_snapshots[i];
-                Player candidate = (Player)_Client_GetPlayerFromNetId_Method.Invoke(null, new object[] {playerSnapshot.m_net_id});
+                //Player candidate = (Player)_Client_GetPlayerFromNetId_Method.Invoke(null, new object[] {playerSnapshot.m_net_id});
+                Player candidate = OL_Client.GetPlayerFromNetId(playerSnapshot.m_net_id);
 
                 if (candidate == p)
                 {
@@ -491,7 +493,20 @@ namespace GameMod {
             if (HandlePlayerRespawn(player,snapshot)) {
                 return;
             }
-            Vector3 newPos = Vector3.LerpUnclamped(snapshot.m_pos, snapshot.m_pos+snapshot.m_vel, t);
+            //Vector3 newPos = Vector3.LerpUnclamped(snapshot.m_pos, snapshot.m_pos+snapshot.m_vel, t);
+            Vector3 newPos;
+            // CCF an attempt to better predict player positions on higher pings -- this portion applies the rotation to the movement vector
+            Quaternion newRot = Quaternion.SlerpUnclamped(snapshot.m_rot, snapshot.m_rot * Quaternion.Euler(snapshot.m_vrot), t);
+            //if (MPServerOptimization.LagCompNew)
+            if (MPServerOptimization.LagCompMode > 0)
+            {
+                newPos = Vector3.LerpUnclamped(snapshot.m_pos, snapshot.m_pos + ((snapshot.m_rot * Quaternion.Inverse(newRot)) * snapshot.m_vel), t); //(Quaternion.Euler(snapshot.m_vrot * t)
+            }
+            else
+            {
+                newPos = Vector3.LerpUnclamped(snapshot.m_pos, snapshot.m_pos + snapshot.m_vel, t);
+            }
+
             // limit ship dive-in if enabled:
             if (Menus.mms_lag_compensation_collision_limit > 0) {
                 const float radius = 0.98f; /// the ship's collider is radius 1, we use a bit smaller one
@@ -525,7 +540,8 @@ namespace GameMod {
                 }
             }
             player.c_player_ship.c_transform.localPosition = newPos;
-            player.c_player_ship.c_transform.rotation = Quaternion.SlerpUnclamped(snapshot.m_rot, snapshot.m_rot*Quaternion.Euler(snapshot.m_vrot), t);
+            //player.c_player_ship.c_transform.rotation = Quaternion.SlerpUnclamped(snapshot.m_rot, snapshot.m_rot*Quaternion.Euler(snapshot.m_vrot), t);
+            player.c_player_ship.c_transform.rotation = newRot; // CCF
             player.c_player_ship.c_mesh_collider_trans.localPosition = player.c_player_ship.c_transform.localPosition;
             player.c_player_ship.c_mesh_collider_trans.localRotation = player.c_player_ship.c_transform.localRotation;
         }
@@ -598,6 +614,8 @@ namespace GameMod {
                 } else {
                     // extrapolation case
                     // use the most recently received snapshot
+                    //msgA = m_last_messages_ring[(m_last_messages_ring_pos_last - 2) & 3]; // CCF see below during the "foreach" as to why we've added another snapshot here
+                    msgA = m_last_messages_ring[(m_last_messages_ring_pos_last - (MPServerOptimization.LagCompMode - 1)) & 3]; // CCF see below during the "foreach" as to why we've added another snapshot here
                     msgB = m_last_messages_ring[m_last_messages_ring_pos_last];
                 }
             } // lock
@@ -641,7 +659,8 @@ namespace GameMod {
             // actually apply the operation to each player
             foreach (Player player in Overload.NetworkManager.m_Players)
             {
-                if (player != null && !player.isLocalPlayer && !player.m_spectator)
+                //if (player != null && !player.isLocalPlayer && !player.m_spectator)
+                if (player != null && !player.isLocalPlayer && !player.m_spectator && m_last_messages_ring_count > 3) // CCF wait until the ring is full before actually doing anything since we need multiple snapshots
                 {
                     // do the actual interpolation or extrapolation, as calculated above
                     if (do_interpolation) {
@@ -651,8 +670,67 @@ namespace GameMod {
                             interpolatePlayer(player, A, B, interpolate_factor);
                         }
                     } else {
+                        NewPlayerSnapshot oldsnapshot = GetPlayerSnapshot(msgA, player);
                         NewPlayerSnapshot snapshot = GetPlayerSnapshot(msgB, player);
-                        if(snapshot != null){
+                        /*if (snapshot == null) // CCF The buffer ran out and a snapshot was excluded from the message as a result. Extrapolate one to keep motion smooth. This should prevent any null snapshots in future frames but we'll keep the checks in down below.
+                        {
+                            Debug.Log("==CCF EXTRAPOLATING FRAME==");
+                            ExtrapolatePlayerSnapshot(ref snapshot, GetPlayerSnapshot(m_last_messages_ring[(m_last_messages_ring_pos_last - 1) & 3], player), Time.fixedDeltaTime);
+                        }*/
+                        if(snapshot != null && oldsnapshot != null){
+                            // An attempt to put some damping on the wild swinging certain highly-mobile players appear to have on high ping. Looks back 2 snapshots and scales the amount of extrapolation by how strongly the velocity vectors are correlated.
+                            /*
+                            if (MPServerOptimization.LagCompNew && snapshot.m_vel.sqrMagnitude < oldsnapshot.m_vel.sqrMagnitude) // only tries to damp motion that appears to be slowing down rather than speeding up
+                            {
+                                //delta_t *= Mathf.Max(Vector3.Dot(snapshot.m_vel.normalized, oldsnapshot.m_vel.normalized), 0f); // only takes direction change into account
+                                delta_t *= Mathf.Max(Vector3.Dot(oldsnapshot.m_vel.normalized, snapshot.m_vel.normalized), 0f); // only takes direction change into account
+                            }
+                            */
+                            /*
+                            if (MPServerOptimization.LagCompNew) // only tries to damp motion that appears to be slowing down rather than speeding up
+                            {
+                                delta_t *= Mathf.Min(snapshot.m_vel.sqrMagnitude / oldsnapshot.m_vel.sqrMagnitude, 1f); // only takes magnitudes into account
+                            }
+                            */
+                            /*
+                            float newMag = snapshot.m_vel.sqrMagnitude;
+                            float oldMag = oldsnapshot.m_vel.sqrMagnitude;
+                            if (MPServerOptimization.LagCompNew && newMag < oldMag) // only tries to damp motion that appears to be slowing down rather than speeding up
+                            {
+                                delta_t *= Mathf.Max(Vector3.Dot(oldsnapshot.m_vel.normalized, snapshot.m_vel.normalized * Mathf.Sqrt(newMag/oldMag)), 0f); // tries to do both
+                            }*/
+
+                            /*
+                            float newMag = snapshot.m_vel.sqrMagnitude;
+                            float oldMag = oldsnapshot.m_vel.sqrMagnitude;
+
+                            switch (MPServerOptimization.LagCompMode)
+                            {
+                                case 1:
+                                    if (newMag < oldMag)
+                                    {
+                                        //delta_t *= Mathf.Max(Vector3.Dot(snapshot.m_vel.normalized, oldsnapshot.m_vel.normalized), 0f); // only takes direction change into account
+                                        delta_t *= Mathf.Max(Vector3.Dot(oldsnapshot.m_vel.normalized, snapshot.m_vel.normalized), 0f); // only takes direction change into account
+                                    }
+                                    break;
+                                case 2:
+                                    delta_t *= Mathf.Min(Mathf.Sqrt(snapshot.m_vel.sqrMagnitude / oldsnapshot.m_vel.sqrMagnitude), 1f); // only takes magnitudes into account
+                                    break;
+                                case 3:
+                                    if (newMag < oldMag)
+                                    {
+                                        //delta_t *= Mathf.Max(Vector3.Dot(snapshot.m_vel.normalized, oldsnapshot.m_vel.normalized * Mathf.Sqrt(newMag / oldMag)), 0f) // only takes direction change into account
+                                        delta_t *= Mathf.Max(Vector3.Dot(oldsnapshot.m_vel.normalized, snapshot.m_vel.normalized * Mathf.Sqrt(newMag / oldMag)), 0f); // tries to do both
+                                    }
+                                    break;
+                                default: // 0, the original mode
+                                    break;
+                            }*/
+                            if (MPServerOptimization.LagCompMode > 0)
+                            {
+                                delta_t *= Mathf.Min(Mathf.Sqrt(snapshot.m_vel.sqrMagnitude / oldsnapshot.m_vel.sqrMagnitude), 1f); // only takes magnitudes into account
+                            }
+                            
                             extrapolatePlayer(player, snapshot, delta_t);
                         }
                     }
@@ -698,6 +776,7 @@ namespace GameMod {
         }
     }
 
+    /* This has been moved to MPServerOptimization and combined with the patch there
     /// <summary>
     /// Force a high input deficit on the server so it always catches up on inputs, even if this number gets out of sync with the number of inputs received.
     /// </summary>
@@ -711,6 +790,7 @@ namespace GameMod {
             }
         }
     }
+    */
 
     /*[HarmonyPatch(typeof(Client), "UpdateInterpolationBuffer")]
     class MPClientExtrapolation_UpdateInterpolationBuffer {

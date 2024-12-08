@@ -292,14 +292,14 @@ namespace GameMod
             return (int)_UIElement_DrawScoresForTeam_Method.Invoke(uie,
                 new object[] { team, pos, col1, col2, col3, col4, col5 });
         }
-
+        
         private static MethodInfo _UIElement_DrawScoreHeader_Method = AccessTools.Method(typeof(UIElement), "DrawScoreHeader");
         public static void DrawScoreHeader(UIElement uie, Vector2 pos, float col1, float col2, float col3, float col4, float col5, bool score = false)
         {
             _UIElement_DrawScoreHeader_Method.Invoke(uie, new object[] { pos, col1, col2, col3, col4, col5, score });
             return;
         }
-
+        
         private static MethodInfo _UIElement_DrawMpScoreboardRaw_Method = typeof(UIElement).GetMethod("DrawMpScoreboardRaw", BindingFlags.NonPublic | BindingFlags.Instance);
         public static void DrawPostgame(UIElement uie)
         {

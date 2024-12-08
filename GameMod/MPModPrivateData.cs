@@ -1277,6 +1277,12 @@ END_ENTRY
             set { MPAudioTaunts.AServer.server_supports_audiotaunts = value; }
         }
 
+        public static bool ClientPhysics
+        {
+            get { return true; }
+            set { MPServerOptimization.enabled = value; Debug.Log("CCF Client-side physics optimizations are enabled this round: " + value); }
+        }
+
         public static JObject Serialize()
         {
             JObject jobject = new JObject();
@@ -1304,6 +1310,7 @@ END_ENTRY
             jobject["thunderboltpassthrough"] = ThunderboltPassthrough;
             jobject["damagenumbers"] = DamageNumbers;
             jobject["audiotauntsupport"] = AudioTauntsSupported;
+            jobject["clientphysics"] = ClientPhysics;
             return jobject;
         }
 
@@ -1337,6 +1344,7 @@ END_ENTRY
             ThunderboltPassthrough = root["thunderboltpassthrough"].GetBool(false);
             DamageNumbers = root["damagenumbers"].GetBool(false);
             AudioTauntsSupported = root["audiotauntsupport"].GetBool(false);
+            ClientPhysics = root["clientphysics"].GetBool(false);
         }
 
         public static string GetModeString(MatchMode mode)

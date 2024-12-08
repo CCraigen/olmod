@@ -213,6 +213,22 @@ namespace GameMod {
             }
         }
 
+        public static string GetMMSLagCompMode()
+        {
+            switch (MPServerOptimization.LagCompMode)
+            {
+                case 0:
+                default:
+                    return "DEFAULT";
+                case 1:
+                    return "PROJECT ROTATION";
+                case 2:
+                    return "1-FRAME LOOKBACK";
+                case 3:
+                    return "2-FRAME LOOKBACK";
+            }
+        }
+
         public static string GetMMSTeamColorDefault()
         {
             return mms_team_color_default ? Loc.LS("DEFAULT") : Loc.LS("CUSTOM");
@@ -1612,6 +1628,18 @@ namespace GameMod {
         // Only called in MP matches
         static void DrawMpTeamSwitch(UIElement uie, ref Vector2 position)
         {
+            //CCF TEMPORARY TOGGLE FOR TESTING
+            uie.SelectAndDrawStringOptionItem("OVERDRIVE-ENHANCED TURNING", position, 14, (MPServerOptimization.ODTurning ? "TRUE" : "FALSE"), "", 1f, false);
+            position.y += 62f;
+            uie.SelectAndDrawStringOptionItem("MOUSE-INDEPENDENT ROLL SPEED", position, 15, (MPServerOptimization.RollFix ? "TRUE" : "FALSE"), "", 1f, false);
+            position.y += 62f;
+            //uie.SelectAndDrawStringOptionItem("EXPERIMENTAL LAG COMP", position, 16, (MPServerOptimization.LagCompNew ? "TRUE" : "FALSE"), "", 1f, false);
+            uie.SelectAndDrawStringOptionItem("EXPERIMENTAL LAG COMP", position, 16, Menus.GetMMSLagCompMode(), "", 1f, false);
+            position.y += 62f;
+            uie.SelectAndDrawItem("INITIALIZE GAUGES", position, 17, false);
+            position.y += 62f;
+            //CCF END TOGGLES
+
             if (!NetworkMatch.IsTeamMode(MPModPrivateData.MatchMode) || !MPModPrivateData.JIPEnabled)
                 return;
 
@@ -1657,6 +1685,32 @@ namespace GameMod {
                 Menus.mms_team_selection = MPTeams.NextTeam(Menus.mms_team_selection ?? GameManager.m_local_player.m_mp_team);
                 MenuManager.PlaySelectSound(1f);
             }
+            // CCF TEMPORARY
+            else if (UIManager.m_menu_selection == 14)
+            {
+                MPServerOptimization.ODTurning = !MPServerOptimization.ODTurning;
+                MenuManager.PlaySelectSound(1f);
+            }
+            else if (UIManager.m_menu_selection == 15)
+            {
+                MPServerOptimization.RollFix = !MPServerOptimization.RollFix;
+                MenuManager.PlaySelectSound(1f);
+            }
+            else if (UIManager.m_menu_selection == 16)
+            {
+                //MPServerOptimization.LagCompNew = !MPServerOptimization.LagCompNew;
+                MPServerOptimization.LagCompMode = (4 + MPServerOptimization.LagCompMode + UIManager.m_select_dir) % 4;
+                MenuManager.PlaySelectSound(1f);
+            }
+            else if (UIManager.m_menu_selection == 17)
+            {
+                if (!MPServerOptimization.gaugesOn)
+                {
+                    GraphManager.GraphManager_GameManager_Start.CmdCreateGraphsCC();
+                }
+                MenuManager.PlaySelectSound(1f);
+            }
+            // CCF END TEMPORARY
         }
 
         static void InitializeMenu()
