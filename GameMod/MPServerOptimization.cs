@@ -471,6 +471,8 @@ namespace GameMod
 		[HarmonyPatch(typeof(Player), "ApplyFixedUpdateInputMessage")]
 		public static class MPServerOptimization_ApplyFixedUpdateInputMessage
 		{
+			private static Dictionary<Player, int> states = new Dictionary<Player, int>();
+
 			public static bool Prefix(Player __instance, PlayerEncodedInput input)
 			{
 				if ((NetworkSim.m_resimulating && enabled) || (GameplayManager.IsDedicatedServer() && MPTweaks.ClientHasTweak(__instance.connectionToClient.connectionId, "cphysics")))
@@ -488,6 +490,49 @@ namespace GameMod
 				{
 					current = (PlayerEncodedPhysics)input;
 				}
+
+				int state = 0;
+				if (GameplayManager.IsDedicatedServer() && states.TryGetValue(__instance, out state))
+                {
+					state++;
+					if (state == 600)
+                    {
+						state = 0;
+
+						Debug.Log("=====================");
+						Debug.Log("Current state for player " + __instance.m_mp_name + " conn_id " + __instance.connectionToClient.connectionId);
+						int num = 0;
+						uint filter = input.m_encoded_bits >> 16;
+						if ((filter & (true ? 1u : 0u)) != 0)
+						{
+							Debug.Log("mouse_raw.x " + input.m_encoded_input[num++]);
+							Debug.Log("mouse_raw.y " + input.m_encoded_input[num++]);
+						}
+						if ((filter & 2u) != 0)
+						{
+							Debug.Log("turn_vec.x " + input.m_encoded_input[num++]);
+							Debug.Log("turn_vec.y " + input.m_encoded_input[num++]);
+							Debug.Log("turn_vec.z " + input.m_encoded_input[num++]);
+						}
+						if ((filter & 4u) != 0)
+						{
+							Debug.Log("move_vec.x " + input.m_encoded_input[num++]);
+							Debug.Log("move_vec.y " + input.m_encoded_input[num++]);
+							Debug.Log("move_vec.z " + input.m_encoded_input[num++]);
+						}
+						if ((filter & 8u) != 0)
+						{
+							Debug.Log("cc_max_move true");
+						}
+						if ((filter & 0x10u) != 0)
+						{
+							Debug.Log("cc_max_turn true");
+						}
+						Debug.Log("=====================");
+					}
+                }
+
+				states[__instance] = state;
 			}
 		}
 

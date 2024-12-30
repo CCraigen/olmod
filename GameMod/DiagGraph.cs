@@ -267,7 +267,7 @@ namespace GameMod
                 int x = 0;
                 foreach (Player p in NetworkManager.m_Players)
                 {
-                    Debug.Log(x + " - " + p.m_mp_name);
+                    Debug.Log(x + " - " + p.m_mp_name + " - local?: " + p.isLocalPlayer);
                     x++;
                 }
 

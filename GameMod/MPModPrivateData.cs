@@ -1279,7 +1279,8 @@ END_ENTRY
 
         public static bool ClientPhysics
         {
-            get { return true; }
+            //get { return true; } // CCF RE-ENABLE ME
+            get { return false; }
             set { MPServerOptimization.enabled = value; Debug.Log("CCF Client-side physics optimizations are enabled this round: " + value); }
         }
 
