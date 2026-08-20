@@ -91,7 +91,14 @@ namespace GameMod.Core {
             }
 
             uConsole.RegisterCommand("getval", "Gets the value of a specified variable -- \"getval [static class].[field]\" (classes can be nested to reach instance fields)", new uConsole.DebugCommand(GetVal));
-            
+
+            //CCF TEMP TEMP TEMP
+            uConsole.RegisterCommand("lscale", "Bezier scale factor set (default 0.3)", new uConsole.DebugCommand(LScale));
+            uConsole.RegisterCommand("lcomp", "Bezier comp factor set (default 18.0)", new uConsole.DebugCommand(LComp));
+            uConsole.RegisterCommand("lrewind", "Bezier rewind frames set (default 7)", new uConsole.DebugCommand(LRewind));
+            uConsole.RegisterCommand("lmult", "Bezier multiplier value set (default 13.0)", new uConsole.DebugCommand(LMult));
+            uConsole.RegisterCommand("ldiv", "Bezier divider value set (default 10.0)", new uConsole.DebugCommand(LDiv));
+
             if (FindArg("-telemetry")) 
                 TelemetryMod.telemetry_enabled = true;
 
@@ -164,7 +171,53 @@ namespace GameMod.Core {
                 Debug.Log("GetVal syntax is \"getval [static class].[field]\" (classes can be nested to reach instance fields)");
             }
         }
-        
+
+        // CCF TEMP TEMP TEMP
+        public static void LScale()
+        {
+            float input = uConsole.GetFloat();
+
+            MPClientShipReckoning.bez_scale = input;
+            Debug.Log("Bezier scale factor set to " +  input);
+        }
+
+        // CCF TEMP TEMP TEMP
+        public static void LComp()
+        {
+            float input = uConsole.GetFloat();
+
+            MPClientShipReckoning.bez_comp = input;
+            Debug.Log("Bezier comp factor set to " + input);
+        }
+
+        // CCF TEMP TEMP TEMP
+        public static void LRewind()
+        {
+            int input = uConsole.GetInt();
+
+            MPClientShipReckoning.rewind = input;
+            Debug.Log("Bezier rewind frames set to " + input);
+        }
+
+        // CCF TEMP TEMP TEMP
+        public static void LMult()
+        {
+            float input = uConsole.GetFloat();
+
+            MPClientShipReckoning.bez_mult = input;
+            Debug.Log("Bezier mult value set to " + input);
+        }
+
+        // CCF TEMP TEMP TEMP
+        public static void LDiv()
+        {
+            float input = uConsole.GetFloat();
+
+            MPClientShipReckoning.bez_div = input;
+            Debug.Log("Bezier div value set to " + input);
+        }
+
+
         public static bool FindArg(string arg)
         {
             return Array.IndexOf<string>(Environment.GetCommandLineArgs(), arg) >= 0;

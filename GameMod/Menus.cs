@@ -224,6 +224,8 @@ namespace GameMod {
                     return "VELOCITY + ROTATION";
                 case 2:
                     return "MOTION ARC";
+                case 3:
+                    return "QUAD BEZIER CURVE";
             }
         }
 
@@ -1294,7 +1296,8 @@ namespace GameMod {
                                         Menus.mms_lag_compensation_collision_limit = (int)(UIElement.SliderPos * 100f + 0.5f);
                                         break;
                                     case 12:
-                                        Menus.mms_lag_compensation_prediction_mode = (Menus.mms_lag_compensation_prediction_mode + 3 + UIManager.m_select_dir) % 3;
+                                        //Menus.mms_lag_compensation_prediction_mode = (Menus.mms_lag_compensation_prediction_mode + 3 + UIManager.m_select_dir) % 3; // CCF
+                                        Menus.mms_lag_compensation_prediction_mode = (Menus.mms_lag_compensation_prediction_mode + 4 + UIManager.m_select_dir) % 4;
                                         MenuManager.PlayCycleSound(1f, (float)UIManager.m_select_dir);
                                         break;
                                     case 13:

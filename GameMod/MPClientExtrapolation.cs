@@ -164,6 +164,22 @@ namespace GameMod {
     }
 
     class MPClientShipReckoning{
+        // CCF TEMP TEMP TEMP
+        //public static float init = 1;
+        public static float bez_mult = 13f;
+        public static float bez_div = 10f;
+        public static float bez_scale = 0.3f;
+        public static float bez_comp = 18f;
+        public static int rewind = 7;
+
+        public static Dictionary<NetworkInstanceId, BezierPlayer> bezier = new Dictionary<NetworkInstanceId, BezierPlayer>();
+
+        //private static Dictionary<NetworkInstanceId, Vector3> bez_pos = new Dictionary<NetworkInstanceId, Vector3>();
+        //private static Dictionary<NetworkInstanceId, Vector3> bez_predicted = new Dictionary<NetworkInstanceId, Vector3>();
+        //public static Dictionary<NetworkInstanceId, int> bez_pause = new Dictionary<NetworkInstanceId, int>();
+        private static bool bez_updated = false;
+        private static float bez_time = 0f;
+
         // ship interpolation OR extrapolation for clients
         public static float m_last_update_time;
         public static float m_last_frame_time;
@@ -177,10 +193,13 @@ namespace GameMod {
         public static int m_ignored_packets_count;
         public static float m_compensation_last;
 
-        // simple ring buffer, use size 4 which is a power of two, so the % 4 becomes simple & 3
-        private static NewPlayerSnapshotToClientMessage[] m_last_messages_ring = new NewPlayerSnapshotToClientMessage[4];
+        // simple ring buffer, use size 4 which is a power of two, so the % 4 becomes simple & 3 // CCF we're going up to a 16-frame buffer for these snapshots
+        // simple ring buffer, use size 16 which is a power of two, so the % 16 becomes simple & 15
+        // private static NewPlayerSnapshotToClientMessage[] m_last_messages_ring = new NewPlayerSnapshotToClientMessage[4]; // CCF we're going up to a 16-frame buffer for these snapshots
+        private static NewPlayerSnapshotToClientMessage[] m_last_messages_ring = new NewPlayerSnapshotToClientMessage[16];
         private static int m_last_messages_ring_count = 0;          // number of elements in the ring buffer
-        private static int m_last_messages_ring_pos_last = 3;       // position of the last added element
+        // private static int m_last_messages_ring_pos_last = 3;       // position of the last added element // CCF we're going up to a 16-frame buffer for these snapshots
+        private static int m_last_messages_ring_pos_last = 15;       // position of the last added element
         private static float m_last_message_time = -1.0f;           // OUR time when we first saw the latest message
         private static float m_last_message_server_time = -1.0f;    // the SERVER's timestamp of the latest message
         private static int m_unsynced_messages_count = 0;           // number of new messages since the last time ResyncTime() was called
@@ -200,9 +219,11 @@ namespace GameMod {
                 }
             }
 
-            m_last_messages_ring_pos_last = (m_last_messages_ring_pos_last + 1) & 3;
+            // m_last_messages_ring_pos_last = (m_last_messages_ring_pos_last + 1) & 3; // CCF we're going up to a 16-frame buffer for these snapshots
+            m_last_messages_ring_pos_last = (m_last_messages_ring_pos_last + 1) & 15;
             m_last_messages_ring[m_last_messages_ring_pos_last] = msg;
-            if (m_last_messages_ring_count < 4) {
+            //if (m_last_messages_ring_count < 4) { // CCF we're going up to a 16-frame buffer for these snapshots
+            if (m_last_messages_ring_count < 16) {
                 m_last_messages_ring_count++;
             }
             //Debug.LogFormat("Adding {0} at {1}, have {2}", msg.m_timestamp, Time.time, m_last_messages_ring_count);
@@ -211,7 +232,8 @@ namespace GameMod {
         // Clear the contents of the ring buffer
         private static void ClearRing()
         {
-            m_last_messages_ring_pos_last = 3;
+            //m_last_messages_ring_pos_last = 3; // CCF we're going up to a 16-frame buffer for these snapshots
+            m_last_messages_ring_pos_last = 15;
             m_last_messages_ring_count = 0;
             m_last_message_time = -1.0f;
             m_last_message_server_time = -1.0f;
@@ -234,6 +256,12 @@ namespace GameMod {
             m_missing_packets_count= 0;
             m_ignored_packets_count = 0;
             m_compensation_last = Time.time;
+            //bez_pos.Clear();
+            //bez_predicted.Clear();
+            //bez_pause.Clear();
+            bezier.Clear();
+            bez_time = 0f;
+            bez_updated = false;
         }
 
         // interpolate a single NewPlayerSnapshot (including the extra fields besides pos and rot)!
@@ -302,6 +330,11 @@ namespace GameMod {
             return C;
         }
 
+        //CCF
+        static bool stateCheck = true;
+        static float timeCheckS = 0.0f;
+        static float timeCheckC = 0.0f;
+        //CCF
 
         // add a AddNewPlayerSnapshot(NewPlayerSnapshotToClientMessage
         // this should be called as soon as possible after the message arrives
@@ -313,53 +346,90 @@ namespace GameMod {
         // guareded by a lock.
         public static void AddNewPlayerSnapshot(NewPlayerSnapshotToClientMessage msg, MPNoPositionCompression.SnapshotVersion version)
         {
-            lock (m_last_messages_lock) {
-                if (m_last_messages_ring_count == 0) {
+            lock (m_last_messages_lock)
+            {
+                if (m_last_messages_ring_count == 0)
+                {
                     // first packet
                     EnqueueToRing(msg);
                     m_last_update_time = Time.time;
                     m_unsynced_messages_count = 0;
-                } else {
+                }
+                else
+                {
                     bool estimateVelocities = (version == MPNoPositionCompression.SnapshotVersion.VANILLA);
                     int deltaFrames;
-                    if (version != MPNoPositionCompression.SnapshotVersion.VELOCITY_TIMESTAMP) {
+                    if (version != MPNoPositionCompression.SnapshotVersion.VELOCITY_TIMESTAMP)
+                    {
                         // we do not have server timestamps,
                         // just assume the packet is the next in sequence
                         deltaFrames = 1;
-                    } else {
+                    }
+                    else
+                    {
                         // determine how many frames in the future the new packet is,
                         // relative to the last one we received
                         deltaFrames = (int)((msg.m_server_timestamp - m_last_message_server_time) / Time.fixedDeltaTime + 0.5f);
+                        //CCF
+                        timeCheckS += msg.m_server_timestamp - m_last_message_server_time;
+                        //CCF
                     }
+                    //CCF
+                    if (stateCheck)
+                    {
+                        Debug.Log("CCF packet mode is " + version.ToString());
+                        string s = "";
+                        foreach (NewPlayerSnapshot snap in msg.m_snapshots)
+                        {
+                            Player p = OL_Client.GetPlayerFromNetId(snap.m_net_id);
+                            if (p != null)
+                            {
+                                s = s + "\n" + p.m_mp_name;
+                            }
+                        }
+                        Debug.Log("CCF snapshotted players: " + s);
+                        stateCheck = false;
+                    }
+                    //CCF
 
-                    if (deltaFrames == 1) {
+                    if (deltaFrames == 1)
+                    {
                         // FAST PATH:
                         // next in sequence, as we expected
                         EnqueueToRing(msg, estimateVelocities);
                         m_unsynced_messages_count++;
-                    } else if (deltaFrames > 1) {
+                    }
+                    else if (deltaFrames > 1)
+                    {
                         // SLOW PATH: at least one packet is missing
                         // we actually do the creation of missing packets here
                         // once per received new snapshot, so that the per-frame
                         // update code path can stay simple
                         // Debug.LogFormat("detected {0} missing packets",  deltaFrames - 1);
                         NewPlayerSnapshotToClientMessage lastMsg = m_last_messages_ring[m_last_messages_ring_pos_last];
-                        if (deltaFrames == 2) {
+                        if (deltaFrames == 2)
+                        {
                             // there is one missing snapshot
-                            EnqueueToRing(InterpolatePlayerSnapshotMessage(lastMsg,msg,0.5f));
+                            EnqueueToRing(InterpolatePlayerSnapshotMessage(lastMsg, msg, 0.5f));
                             EnqueueToRing(msg);
-                        } else if (deltaFrames == 3) {
+                        }
+                        else if (deltaFrames == 3)
+                        {
                             // there are two missing snapshots
-                            EnqueueToRing(InterpolatePlayerSnapshotMessage(lastMsg,msg,0.3333f));
-                            EnqueueToRing(InterpolatePlayerSnapshotMessage(lastMsg,msg,0.6667f));
+                            EnqueueToRing(InterpolatePlayerSnapshotMessage(lastMsg, msg, 0.3333f));
+                            EnqueueToRing(InterpolatePlayerSnapshotMessage(lastMsg, msg, 0.6667f));
                             EnqueueToRing(msg);
-                        } else if (deltaFrames ==  4) {
+                        }
+                        else if (deltaFrames == 4)
+                        {
                             // there are three missing snapshots
-                            EnqueueToRing(InterpolatePlayerSnapshotMessage(lastMsg,msg,0.25f));
-                            EnqueueToRing(InterpolatePlayerSnapshotMessage(lastMsg,msg,0.5f));
-                            EnqueueToRing(InterpolatePlayerSnapshotMessage(lastMsg,msg,0.75f));
+                            EnqueueToRing(InterpolatePlayerSnapshotMessage(lastMsg, msg, 0.25f));
+                            EnqueueToRing(InterpolatePlayerSnapshotMessage(lastMsg, msg, 0.5f));
+                            EnqueueToRing(InterpolatePlayerSnapshotMessage(lastMsg, msg, 0.75f));
                             EnqueueToRing(msg);
-                        } else {
+                        }
+                        else
+                        {
                             // there are more than 3 missing snapshots,
                             // just take the completely new data in
                             EnqueueToRing(ExtrapolatePlayerSnapshotMessage(msg, -3.0f * Time.fixedDeltaTime));
@@ -367,18 +437,23 @@ namespace GameMod {
                             EnqueueToRing(ExtrapolatePlayerSnapshotMessage(msg, -1.0f * Time.fixedDeltaTime));
                             EnqueueToRing(msg);
                         }
+                        Debug.LogFormat("detected {0} missing snapshots", -deltaFrames); // CCF
                         m_unsynced_messages_count += deltaFrames;
                         m_missing_packets_count += (deltaFrames - 1);
-                    } else if (deltaFrames < -180) {
+                    }
+                    else if (deltaFrames < -180)
+                    {
                         // WEIRD PATH: message from the past older than 3 seconds
                         // this means something completely weird is going on on the network
                         // or on the server, and we better completely re-sync with the server
-                        // Debug.LogFormat("detected message {0} frames from the past, FULL RESYNC!",  -deltaFrames);
+                        Debug.LogFormat("detected message {0} frames from the past, FULL RESYNC!", -deltaFrames); // CCF
                         ClearRing();
                         EnqueueToRing(msg, false);
                         m_last_update_time = Time.time;
                         m_unsynced_messages_count = 0;
-                    } else {
+                    }
+                    else
+                    {
                         // Debug.LogFormat("detected old / duplicated message {0} frames from the past",  -deltaFrames);
                         // OLD / DUPLICATED messages: these are simply ignored
                         // If it is a true duplicate, it is worthless, and if we got messages
@@ -398,6 +473,12 @@ namespace GameMod {
                 m_received_packets_count++;
                 m_last_message_time = Time.time;
                 m_last_message_server_time = msg.m_server_timestamp;
+
+                // If we're in Bezier mode, we need to flag that new data has been received so we can generate a new set of curve predictions
+                if (Menus.mms_lag_compensation_prediction_mode == 3)
+                {
+                    bez_updated = true;
+                }
             } // end lock
         }
 
@@ -425,7 +506,7 @@ namespace GameMod {
             // That means the 24ms tick will be seen as 16.67 in Time.time,
             // and everything cancles itself out nicely
             m_last_update_time += m_unsynced_messages_count * Time.fixedDeltaTime;
-            m_unsynced_messages_count = 0;
+            // m_unsynced_messages_count = 0; //CCF
 
             // check if the time base is still plausible
             float delta = (m_last_message_time - m_last_update_time) / Time.fixedDeltaTime; // in ticks
@@ -433,13 +514,20 @@ namespace GameMod {
             float frameSoftSyncLimit = 2.0f; ///hard-sync if we're off by more than that many physics ticks
             if (delta < -frameSoftSyncLimit || delta > frameSoftSyncLimit) {
                 // hard resync
-                // Debug.LogFormat("hard resync by {0} frames", delta);
+                Debug.LogFormat("hard resync by {0} frames", delta); // CCF
                 m_last_update_time = Time.time;
             } else {
                 // soft resync
                 float smoothing_factor = 0.1f;
+                //Debug.LogFormat("soft resync by {0} frames", delta); // CCF
                 m_last_update_time += smoothing_factor * delta * Time.fixedDeltaTime;
+                //CCF
+                //timeCheckC += m_last_message_time - m_last_update_time;
+                timeCheckC += (smoothing_factor * delta + m_unsynced_messages_count) * Time.fixedDeltaTime;
+                //CCF
             }
+            //CCF
+            m_unsynced_messages_count = 0;
         }
 
         public static NewPlayerSnapshot GetPlayerSnapshot(NewPlayerSnapshotToClientMessage msg, Player p)
@@ -466,6 +554,11 @@ namespace GameMod {
                 float num2 = Vector3.Distance(snapshot.m_pos, player.m_lerp_death_pos);
                 if (num >= num2) {
                     // still special case for respawning
+                    //bez_pause[player.netId] = 30; // pause interpolation for 500ms when respawning // CCF
+                    if (bezier.ContainsKey(player.netId))
+                    {
+                        bezier[player.netId].pause = 30; // pause interpolation for 500ms when respawning
+                    }
                     return true;
                 }
 
@@ -485,6 +578,7 @@ namespace GameMod {
             player.c_player_ship.c_mesh_collider_trans.localRotation = player.c_player_ship.c_transform.localRotation;
         }
 
+        //public static void extrapolatePlayer(Player player, NewPlayerSnapshot snapshot, float t) // CCF
         public static void extrapolatePlayer(Player player, NewPlayerSnapshot snapshot, float t)
         {
             if (HandlePlayerRespawn(player, snapshot))
@@ -492,12 +586,13 @@ namespace GameMod {
                 return;
             }
 
-            Vector3 newPos = Vector3.LerpUnclamped(snapshot.m_pos, snapshot.m_pos + snapshot.m_vel, t);
+            Vector3 newPos;
             Quaternion newRot;
 
             float rotScale;
             float arcRotScale;
 
+            // Apply only a portion of the rotation if so desired. This can help mitigate over-rotation with higher latency.
             switch (Menus.mms_lag_compensation_rotation_strength)
             {
                 default:
@@ -523,20 +618,156 @@ namespace GameMod {
                     break;
             }
 
-            if (Menus.mms_lag_compensation_prediction_mode == 0)
+            // Calculate the extrapolated rotation (or not, depending on the mode)
+            if (Menus.mms_lag_compensation_prediction_mode == 0) // Velocity mode
             {
                 newRot = snapshot.m_rot;
             }
-            else // Vel + Rotation or Motion Arc mode
+            else // Vel + Rotation, Motion Arc, or QuadBezier mode
             {
                 newRot = Quaternion.Euler(snapshot.m_vrot * (Mathf.Rad2Deg * t * rotScale)) * snapshot.m_rot; // Scales the angular velocity first now. Also the original method for this did not convert radians to degrees so was barely doing anything, thus why the default is now just straight-up disabled
             }
 
-            // An attempt to better predict player positions on higher pings -- this portion applies the rotation to the movement vector and then averages between the linear and rotated positions
-            if (Menus.mms_lag_compensation_prediction_mode == 2) // Motion Arc mode
+            // Extrapolate the ship position
+
+            // Uses ship positions from 3 previous spaced-out frames to extrapolate the likely future position -- much smoother motion that tries to take acceleration into account, but potentially less accurate positioning
+            if (Menus.mms_lag_compensation_prediction_mode == 3) // QuadBezier mode
             {
-                Vector3 rotPos = Vector3.LerpUnclamped(snapshot.m_pos, snapshot.m_pos + ((Quaternion.Inverse(snapshot.m_rot) * newRot) * snapshot.m_vel), t);
-                newPos = Vector3.Lerp(newPos, rotPos, arcRotScale); // some semblance of faking inertia -- only go ~1/3 of the way to the rotated position vector when combined with the scaled-back rotational speed
+                BezierPlayer bez;
+
+                bool found = bezier.ContainsKey(player.netId);
+                if (found)
+                {
+                    bez = bezier[player.netId];
+                }
+                else
+                {
+                    bez = new BezierPlayer();
+                    bezier[player.netId] = bez;
+                }
+
+                if (bez_updated)
+                {
+                    bez_time = MPClientExtrapolation.GetShipExtrapolationTime();
+                    
+                    if (bez.pause <= 0)
+                    {
+                        bez.pause = 0;
+                    }
+                    else
+                    {
+                        bez.pause--;
+                    }
+
+                    /*
+                    int pause;
+                    bez_pause.TryGetValue(player.netId, out pause);
+                    if (pause <= 0)
+                    {
+                        pause = 0;
+                        bez_pause.Remove(player.netId);
+                    }
+                    else
+                    {
+                        pause--;
+                        bez_pause[player.netId] = pause;
+                    }*/
+
+                    /*
+                    if (bez_pos.ContainsKey(player.netId) && pause == 0)
+                    {
+                        bez_pos[player.netId] = player.c_player_ship.c_transform.localPosition; // extrapolate from wherever the last position reached was to negate jumping -- TODO needs a solid check for teleport and spawn
+                        player.m_mp_name = "POS";
+                    }
+                    else  // either first time set, or respawned, or teleported
+                    {
+                        bez_pos[player.netId] = snapshot.m_pos;
+                        player.m_mp_name = "NOPOS";
+                    }*/
+
+                    if (found && bez.pause == 0)
+                    {
+                        bez.position = player.c_player_ship.c_transform.localPosition; // extrapolate from wherever the last position reached was to negate jumping -- TODO needs a solid check for teleport and spawn, the timer should work but is a bit hacky
+
+                        NewPlayerSnapshot a = GetPlayerSnapshot(m_last_messages_ring[(m_last_messages_ring_pos_last - rewind * 2) & 15], player); // oldest
+                        NewPlayerSnapshot b = GetPlayerSnapshot(m_last_messages_ring[(m_last_messages_ring_pos_last - rewind) & 15], player);
+
+                        if (a != null && b != null)
+                        {
+                            float factor = 1 + ((bez_mult * bez_time * bez_scale) / (bez_div * bez_time + bez_comp * bez_scale));
+                            bez.predicted = (1 - factor) * (1 - factor) * a.m_pos + 2 * (1 - factor) * factor * b.m_pos + factor * factor * snapshot.m_pos; // the actual bezier calculation
+                        }
+                        else
+                        {
+                            bez.predicted = snapshot.m_pos;
+                        }
+                    }
+                    else
+                    {
+                        bez.position = snapshot.m_pos;
+                        bez.predicted = snapshot.m_pos;
+                    }
+
+                    //float factor = (120f * t) / (60f * t + 2f); // lol no
+                    //float factor = (120f * t * scale) / (60f * t * scale + comp); // just straight wrong
+                    //float factor = 1 + ((120f * t * scale) / (60f * t + comp * scale)); // seems overcooked
+                    //float factor = 1 + ((17.14f * t * scale) / (8.57f * t + comp * scale)); // magic numbers go wee?
+                    //float factor = 1 + ((13f * t * scale) / (10f * t + comp * scale)); // different magic numbers, tuned for better linear approximation when expected
+
+                    //float factor = 1 + ((13f * bez_time * scale) / (10f * bez_time + comp * scale)); // different magic numbers, tuned for better linear approximation when expected
+
+                    //int rewind = 7; // maximum of 7 frames
+
+                    /*
+                    // we need 2 extra snapshots
+                    NewPlayerSnapshot a = GetPlayerSnapshot(m_last_messages_ring[(m_last_messages_ring_pos_last - rewind * 2) & 15], player); // oldest
+                    NewPlayerSnapshot b = GetPlayerSnapshot(m_last_messages_ring[(m_last_messages_ring_pos_last - rewind) & 15], player);
+
+                    if (a != null && b != null && pause == 0)
+                    {
+                        //newPos = (1 - factor) * (1 - factor) * a.m_pos + 2 * (1 - factor) * factor * b.m_pos + factor * factor * snapshot.m_pos; // the actual bezier calculation
+                        bez_predicted[player.netId] = (1 - factor) * (1 - factor) * a.m_pos + 2 * (1 - factor) * factor * b.m_pos + factor * factor * snapshot.m_pos; // the actual bezier calculation
+                        player.m_mp_name += "+PRED";
+                    }
+                    else
+                    {
+                        bez_predicted[player.netId] = snapshot.m_pos;
+                        player.m_mp_name += "+NOPRED";
+                    }
+                    */
+                }
+
+                if (found && bez_time != 0f)
+                {
+                    newPos = Vector3.LerpUnclamped(bez.position, bez.predicted, (t - bez_time) / Time.fixedDeltaTime);
+                }
+                else
+                {
+                    newPos = snapshot.m_pos;
+                }
+                /*
+                if (bez_time != 0f && bez_pos.ContainsKey(player.netId) && bez_predicted.ContainsKey(player.netId))
+                {
+                    //newPos = Vector3.LerpUnclamped(bez_pos[player.netId], bez_predicted[player.netId], (t - bez_time) / bez_time);
+                    newPos = Vector3.LerpUnclamped(bez_pos[player.netId], bez_predicted[player.netId], (t - bez_time) / Time.fixedDeltaTime);
+                }
+                else
+                {
+                    //Debug.Log("CCF null " + (bez_pos.ContainsKey(player.netId) ? "" : "position ") + (bez_predicted.ContainsKey(player.netId) ? "" : "prediction ") + "found for " + player.m_mp_name + ", bez_time " + bez_time);
+                    newPos = snapshot.m_pos;
+                }
+                */
+            }
+            else // One of the 3 standard modes. Calculate the position from the snapshot velocity as we were doing before
+            {
+                newPos = Vector3.LerpUnclamped(snapshot.m_pos, snapshot.m_pos + snapshot.m_vel, t);
+
+                // An attempt to better predict player positions on higher pings -- this portion applies the rotation to the movement vector and then averages between the linear and rotated positions
+                if (Menus.mms_lag_compensation_prediction_mode == 2) // Motion Arc mode
+                {
+                    Vector3 rotPos = Vector3.LerpUnclamped(snapshot.m_pos, snapshot.m_pos + ((Quaternion.Inverse(snapshot.m_rot) * newRot) * snapshot.m_vel), t);
+                    newPos = Vector3.Lerp(newPos, rotPos, arcRotScale); // some semblance of faking inertia -- only go ~1/3 of the way to the rotated position vector when combined with the scaled-back rotational speed
+                }
             }
 
             // limit ship dive-in if enabled:
@@ -632,15 +863,18 @@ namespace GameMod {
                     //       effectively acceses the i-ith most recent element (i starting by 0)
                     //       since 4-(i-1) == 4-i+ 1 = 5-i, 5-i references the next older one
                     if ( interpolate_ticks < m_last_messages_ring_count ) {
-                        msgA = m_last_messages_ring[(m_last_messages_ring_pos_last + 4 - interpolate_ticks) & 3];
-                        msgB = m_last_messages_ring[(m_last_messages_ring_pos_last + 5 - interpolate_ticks) & 3];
+                        // msgA = m_last_messages_ring[(m_last_messages_ring_pos_last + 4 - interpolate_ticks) & 3]; // CCF we're going up to a 16-frame buffer for these snapshots
+                        // msgB = m_last_messages_ring[(m_last_messages_ring_pos_last + 5 - interpolate_ticks) & 3];
+                        msgA = m_last_messages_ring[(m_last_messages_ring_pos_last - interpolate_ticks) & 15];
+                        msgB = m_last_messages_ring[(m_last_messages_ring_pos_last + 1 - interpolate_ticks) & 15];
                         interpolate_factor = delta_ticks - Mathf.Floor(delta_ticks);
                     } else {
                         // not enough packets received so far
                         // "extrapolate" into the past
                         do_interpolation = false;
                         // get the oldest snapshot we have
-                        msgB =  m_last_messages_ring[(m_last_messages_ring_pos_last + 5 - m_last_messages_ring_count) & 3];
+                        // msgB =  m_last_messages_ring[(m_last_messages_ring_pos_last + 5 - m_last_messages_ring_count) & 3]; // CCF we're going up to a 16-frame buffer for these snapshots
+                        msgB =  m_last_messages_ring[(m_last_messages_ring_pos_last + 1 - m_last_messages_ring_count) & 15];
                         // offset the time for the extrapolation
                         // delta_t is currently relative to the most recent element we have,
                         // but we need it relative to msgA
@@ -649,7 +883,8 @@ namespace GameMod {
                 } else {
                     // extrapolation case
                     // use the most recently received snapshot
-                    msgA = m_last_messages_ring[(m_last_messages_ring_pos_last - 2) & 3]; // we've added another snapshot here, see below during the "foreach"
+                    //msgA = m_last_messages_ring[(m_last_messages_ring_pos_last - 2) & 3]; // we've added another snapshot here, see below during the "foreach" // CCF
+                    msgA = m_last_messages_ring[(m_last_messages_ring_pos_last - 2) & 15]; // we've added another snapshot here, see below during the "foreach"
                     msgB = m_last_messages_ring[m_last_messages_ring_pos_last];
                 }
             } // lock
@@ -675,12 +910,18 @@ namespace GameMod {
             //       as extrapolation...
             m_compensation_interpol_count += (interpolate_ticks > 0)?1:0;
             if (Time.time >= m_compensation_last + 5.0 && m_compensation_count > 0) {
-                // Debug.LogFormat("ship lag compensation over last {0} frames: {1}ms / {2} physics ticks, {3} interpolation ({4}%) packets: {5} received / {6} missing / {7} old ignored",
-                //                 m_compensation_count, 1000.0f* (m_compensation_sum/ m_compensation_count),
-                //                 (m_compensation_sum/m_compensation_count)/Time.fixedDeltaTime,
-                //                 m_compensation_interpol_count,
-                //                 100.0f*((float)m_compensation_interpol_count/(float)m_compensation_count),
-                //                 m_received_packets_count, m_missing_packets_count, m_ignored_packets_count);
+                Debug.LogFormat("Ship lag compensation over last {0} frames: {1}ms / {2} physics ticks (ping {8}), {3} interpolation ({4}%) packets: {5} received / {6} missing / {7} old ignored",
+                                m_compensation_count, 1000.0f * (m_compensation_sum / m_compensation_count),
+                                (m_compensation_sum / m_compensation_count) / Time.fixedDeltaTime,
+                                m_compensation_interpol_count,
+                                100.0f * ((float)m_compensation_interpol_count / (float)m_compensation_count),
+                                m_received_packets_count, m_missing_packets_count, m_ignored_packets_count, MPClientExtrapolation.GetShipExtrapolationTime());
+                //CCF
+                Debug.LogFormat("Extras - timecheck from server: {0}, timecheck from client: {1}", timeCheckS, timeCheckC);
+                timeCheckC = 0;
+                timeCheckS = 0;
+                stateCheck = true;
+                //CCF
                 m_compensation_sum = 0.0f;
                 m_compensation_count = 0;
                 m_compensation_interpol_count = 0;
@@ -693,7 +934,8 @@ namespace GameMod {
             // actually apply the operation to each player
             foreach (Player player in Overload.NetworkManager.m_Players)
             {
-                if (player != null && !player.isLocalPlayer && !player.m_spectator && m_last_messages_ring_count > 3) // wait until the ring is full before actually doing anything since we need multiple snapshots
+                //if (player != null && !player.isLocalPlayer && !player.m_spectator && m_last_messages_ring_count > 3) // wait until the ring is full before actually doing anything since we need multiple snapshots // CCF
+                if (player != null && !player.isLocalPlayer && !player.m_spectator && m_last_messages_ring_count > 15) // wait until the ring is full before actually doing anything since we need multiple snapshots
                 {
                     // do the actual interpolation or extrapolation, as calculated above
                     if (do_interpolation)
@@ -730,7 +972,18 @@ namespace GameMod {
                     }
                 }
             }
+            if (!do_interpolation)
+            {
+                bez_updated = false;
+            }
         }
+    }
+
+    class BezierPlayer
+    {
+        public Vector3 position;
+        public Vector3 predicted;
+        public int pause = 30;
     }
 
     // called per frame
@@ -767,6 +1020,20 @@ namespace GameMod {
                 return;
             }
             MPClientShipReckoning.ResetForNewMatch();
+        }
+    }
+
+    //
+    [HarmonyPatch(typeof(TriggerWarper), "TeleportObject")]
+    class MPCilentExtrapolation_TeleportObject
+    {
+        private static void Postfix(Transform obj_transform)
+        {
+            Player player = obj_transform.GetComponent<Player>();
+            if (GameplayManager.IsMultiplayer && player && MPClientShipReckoning.bezier.ContainsKey(player.netId))
+            {
+                MPClientShipReckoning.bezier[player.netId].pause = 30;
+            }
         }
     }
 

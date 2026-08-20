@@ -68,6 +68,11 @@ namespace GameMod {
             {
                 player.c_player_ship.RestoreLights();
                 MPOpponentCockpits.SetOpponentCockpitVisibility(player,false);
+                //MPClientShipReckoning.bez_pause[player.netId] = 30; //CCF
+                if (MPClientShipReckoning.bezier.ContainsKey(player.netId))
+                {
+                    MPClientShipReckoning.bezier[player.netId].pause = 30;
+                }
             }
             else
             {
